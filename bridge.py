@@ -32,6 +32,25 @@ class TagGUIBridge(QObject):
             return json.dumps(self._scan_images())
         return ""
 
+    @Slot(result=str)
+    def getDatasetSettings(self):
+        settings_path = self.dataset_path / "settings.json"
+        if settings_path.exists():
+            try:
+                return settings_path.read_text(encoding="utf-8")
+            except Exception as e:
+                print(f"[Backend] Failed to read settings.json: {e}")
+        return json.dumps({"keywords": ""})
+
+    @Slot(str)
+    def saveDatasetSettings(self, keywords_str):
+        settings_path = self.dataset_path / "settings.json"
+        try:
+            data = {"keywords": keywords_str}
+            settings_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception as e:
+            print(f"[Backend] Failed to write settings.json: {e}")
+
     def _scan_images(self):
         images = []
         valid_exts = {".png", ".jpg", ".jpeg", ".webp"}
@@ -80,7 +99,6 @@ class TagGUIBridge(QObject):
 
     @Slot(str)
     def saveBatchImageTags(self, updates_json_str):
-        """Batch updates multiple sidecar txt files at once."""
         try:
             updates = json.loads(updates_json_str)
             for rel_path, tags_str in updates.items():

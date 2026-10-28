@@ -158,11 +158,11 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      cursor: pointer;
     }
     .tag-chip span { cursor: pointer; color: #818cf8; }
     .tag-chip span:hover { color: #f87171; }
 
-    /* Autocomplete dropdown */
     .autocomplete-box {
       position: absolute;
       top: 100%; left: 0; right: 0;
@@ -212,9 +212,13 @@
       </div>
     </div>
 
-    <div style="flex: 1; max-width: 450px; margin: 0 24px; position: relative;">
-      <input id="filter-input" type="text" placeholder='Filter (e.g. tag:cat, "untgr"), Ctrl+F...' class="text-input" oninput="applyFilter()" />
-      <div style="position: absolute; right: 8px; top: 6px; font-size: 10px; color: #94a3b8; background: #12141c; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08);">
+    <!-- Search Bar Wrapper with Flex Layout & Clear Button -->
+    <div style="flex: 1; max-width: 450px; margin: 0 24px; position: relative; display: flex; align-items: center; background-color: #181a24; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding-right: 8px;">
+      <input id="filter-input" type="text" aria-label="Filter dataset" placeholder='Filter (name or tag, e.g. cat), Ctrl+F...' oninput="onFilterInputChanged()" style="flex: 1; background: transparent; border: none; padding: 6px 12px; color: #e2e8f0; font-size: 12px; font-family: monospace; outline: none;" />
+
+      <button id="clear-filter-btn" onclick="clearFilter()" title="Clear filter" style="background: none; border: none; color: #64748b; font-size: 14px; font-weight: bold; cursor: pointer; display: none; padding: 0 6px; align-items: center; justify-content: center;">×</button>
+
+      <div style="font-size: 10px; color: #94a3b8; background: #12141c; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); margin-left: 6px; pointer-events: none; white-space: nowrap;">
         <span id="image-count">0</span> / <span id="total-count">0</span>
       </div>
     </div>
@@ -229,7 +233,11 @@
     <main>
       <div class="grid-header">
         <span id="selection-status">Grid View (Arrow keys to navigate, Shift+Click for multi-select)</span>
-        <button onclick="clearMultiSelection()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Clear Selection</button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span id="selection-counter" style="font-family: monospace; font-size: 11px; color: #38bdf8; margin-right: 8px;">0 / 0 selected</span>
+          <button onclick="selectAllFiltered()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Select All</button>
+          <button onclick="clearMultiSelection()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Clear Selection</button>
+        </div>
       </div>
       <div id="image-grid" class="image-grid"></div>
     </main>
@@ -240,9 +248,20 @@
         <span id="selected-filename" style="font-size: 10px; color: #64748b; font-family: monospace; font-weight: normal;">No image selected</span>
       </div>
 
-      <div class="container-pad" style="border-bottom: 1px solid rgba(255,255,255,0.08); position: relative;">
-        <input id="tag-input" type="text" placeholder="Add tag... (Press Enter)" class="text-input" autocomplete="off" />
+      <div class="container-pad" style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); position: relative;">
+        <input id="tag-input" type="text" aria-label="Add tag input" placeholder="Add tag... (Press Enter)" class="text-input" autocomplete="off" />
         <div id="autocomplete-box" class="autocomplete-box"></div>
+      </div>
+
+      <div class="container-pad" style="border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+        <input id="keywords-input" type="text" aria-label="Dataset training keywords" placeholder="Keywords (comma-separated, prepends)..." class="text-input" autocomplete="off" />
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+          <span style="font-size: 9px; color: #64748b; font-family: monospace;">Prepends & sorts</span>
+          <div style="display: flex; gap: 6px;">
+            <button onclick="applyKeywordsToSelectionBtn()" title="Apply keywords to current selection (Enter)" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Apply</button>
+            <button onclick="applyKeywordsToAll()" title="Apply keywords to all pictures in dataset" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Apply to All</button>
+          </div>
+        </div>
       </div>
 
       <div class="tags-container">
@@ -274,19 +293,40 @@
     let selectedImageIndex = null;
     let multiSelectedIndices = new Set();
     let lastClickedIndex = null;
+    let keywordsInput = null;
+    let selectedLeftTag = null;
 
-    new QWebChannel(qt.webChannelTransport, function(channel) {
-        backend = channel.objects.backend;
-        fetchDataset();
-    });
+    // --- Undo History Stack ---
+    let undoStack = [];
+    const MAX_HISTORY = 50;
 
-    function fetchDataset() {
-        if (!backend) return;
-        backend.getDatasetImages(function(response) {
-            datasetImages = JSON.parse(response);
-            filteredImages = [...datasetImages];
-            updateDatasetUI();
+    // --- Tag Sanitization & Deduplication ---
+    function cleanImageTags(tags) {
+        if (!Array.isArray(tags)) return [];
+        const seen = new Set();
+        return tags.filter(tag => {
+            const trimmed = tag.trim();
+            const lower = trimmed.toLowerCase();
+            if (!lower) return false;
+            if (seen.has(lower)) {
+                return false; // Drops duplicate starting from the last/subsequent occurrences
+            }
+            seen.add(lower);
+            return true;
         });
+    }
+
+    function addTagToImage(img, tag) {
+        const trimmed = tag.trim();
+        if (!trimmed) return false;
+        const lower = trimmed.toLowerCase();
+
+        const exists = img.tags.some(t => t.trim().toLowerCase() === lower);
+        if (!exists) {
+            img.tags.push(trimmed);
+            return true;
+        }
+        return false;
     }
 
     function browseFolder() {
@@ -294,24 +334,153 @@
         backend.browseDatasetFolder(function(response) {
             if (!response) return;
             datasetImages = JSON.parse(response);
+            datasetImages.forEach(img => {
+                img.tags = cleanImageTags(img.tags);
+            });
             filteredImages = [...datasetImages];
             document.getElementById('image-grid').innerHTML = '';
             selectedImageIndex = null;
             multiSelectedIndices.clear();
-            updateDatasetUI();
+            selectedLeftTag = null;
+            undoStack = [];
+
+            backend.getDatasetSettings(function(settingsRes) {
+                try {
+                    const settings = JSON.parse(settingsRes);
+                    if (keywordsInput) keywordsInput.value = settings.keywords || "";
+                } catch(e) {
+                    if (keywordsInput) keywordsInput.value = "";
+                }
+                updateDatasetUI();
+            });
         });
     }
+
+    function fetchDataset() {
+        if (!backend) return;
+        backend.getDatasetImages(function(response) {
+            datasetImages = JSON.parse(response);
+            datasetImages.forEach(img => {
+                img.tags = cleanImageTags(img.tags);
+            });
+            filteredImages = [...datasetImages];
+
+            backend.getDatasetSettings(function(settingsRes) {
+                try {
+                    const settings = JSON.parse(settingsRes);
+                    if (keywordsInput) keywordsInput.value = settings.keywords || "";
+                } catch(e) {
+                    if (keywordsInput) keywordsInput.value = "";
+                }
+                updateDatasetUI();
+            });
+        });
+    }
+
+    function pushUndoState() {
+        const snapshot = {
+            images: datasetImages.map(img => ({
+                relative_path: img.relative_path,
+                tags: [...img.tags]
+            })),
+            keywords: keywordsInput ? keywordsInput.value : "",
+            selectedImageIndex: selectedImageIndex
+        };
+        undoStack.push(snapshot);
+        if (undoStack.length > MAX_HISTORY) {
+            undoStack.shift();
+        }
+    }
+
+    function performUndo() {
+        if (undoStack.length === 0) return;
+
+        const previousState = undoStack.pop();
+        const batchUpdates = {};
+
+        previousState.images.forEach(prevImg => {
+            const currentImg = datasetImages.find(img => img.relative_path === prevImg.relative_path);
+            if (currentImg) {
+                currentImg.tags = cleanImageTags([...prevImg.tags]);
+                batchUpdates[currentImg.relative_path] = currentImg.tags.join(', ');
+            }
+        });
+
+        if (keywordsInput) keywordsInput.value = previousState.keywords;
+        if (backend) {
+            backend.saveBatchImageTags(JSON.stringify(batchUpdates));
+            if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
+        }
+
+        selectedImageIndex = previousState.selectedImageIndex;
+
+        renderGlobalTagsList();
+        renderGrid();
+        if (selectedImageIndex !== null) {
+            selectImage(selectedImageIndex, true);
+        }
+    }
+
+    new QWebChannel(qt.webChannelTransport, function(channel) {
+        backend = channel.objects.backend;
+        keywordsInput = document.getElementById('keywords-input');
+
+        if (keywordsInput) {
+            keywordsInput.addEventListener('input', function() {
+                renderActiveTags();
+                renderGlobalTagsList();
+                if (backend) {
+                    backend.saveDatasetSettings(this.value);
+                }
+            });
+
+            keywordsInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const val = this.value.trim();
+                    if (val && selectedImageIndex !== null) {
+                        applyKeywordsToSelection(val);
+                    }
+                }
+            });
+        }
+
+        fetchDataset();
+    });
 
     function updateDatasetUI() {
         document.getElementById('total-count').innerText = datasetImages.length;
         document.getElementById('image-count').innerText = filteredImages.length;
-        document.getElementById('dataset-path-label').innerText = backend.dataset_path || "Dataset";
+        document.getElementById('dataset-path-label').innerText = backend && backend.dataset_path ? backend.dataset_path : "Dataset";
 
         renderGlobalTagsList();
         renderGrid();
         if (filteredImages.length > 0 && selectedImageIndex === null) {
             selectImage(0, false);
         }
+    }
+
+    function onFilterInputChanged() {
+        const input = document.getElementById('filter-input');
+        const clearBtn = document.getElementById('clear-filter-btn');
+
+        if (clearBtn) {
+            clearBtn.style.display = input.value.trim().length > 0 ? 'flex' : 'none';
+        }
+
+        applyFilter();
+    }
+
+    function clearFilter() {
+        const input = document.getElementById('filter-input');
+        const clearBtn = document.getElementById('clear-filter-btn');
+
+        input.value = '';
+        if (clearBtn) {
+            clearBtn.style.display = 'none';
+        }
+
+        applyFilter();
+        input.focus();
     }
 
     function applyFilter() {
@@ -322,7 +491,6 @@
         } else if (query === 'untagged') {
             filteredImages = datasetImages.filter(img => img.tags.length === 0);
         } else {
-            // Automatically searches both filenames and tags without needing any prefix
             filteredImages = datasetImages.filter(img =>
                 img.filename.toLowerCase().includes(query) ||
                 img.tags.some(t => t.toLowerCase().includes(query))
@@ -331,6 +499,7 @@
 
         document.getElementById('image-count').innerText = filteredImages.length;
         document.getElementById('image-grid').innerHTML = '';
+        renderGlobalTagsList();
 
         multiSelectedIndices.clear();
         if (filteredImages.length > 0) {
@@ -368,14 +537,12 @@
 
             card.onclick = (e) => {
                 if (e.shiftKey && lastClickedIndex !== null) {
-                    // Range multi-select
                     const start = Math.min(lastClickedIndex, originalIdx);
                     const end = Math.max(lastClickedIndex, originalIdx);
                     for (let i = start; i <= end; i++) {
                         multiSelectedIndices.add(i);
                     }
                 } else if (e.ctrlKey || e.metaKey) {
-                    // Toggle multi-select
                     if (multiSelectedIndices.has(originalIdx)) {
                         multiSelectedIndices.delete(originalIdx);
                     } else {
@@ -396,7 +563,7 @@
 
     function selectImage(idx, updateUI = true) {
         selectedImageIndex = idx;
-        const img = datasetImages.idx || datasetImages[idx];
+        const img = datasetImages[idx];
         if (!img) return;
 
         document.getElementById('selected-filename').innerText = img.filename;
@@ -415,14 +582,23 @@
     }
 
     function updateSelectionStatusText() {
-        const count = multiSelectedIndices.size;
+        const totalCount = filteredImages.length;
+        const selectedCount = selectedImageIndex !== null ? 1 + multiSelectedIndices.size : 0;
+
+        const counterEl = document.getElementById('selection-counter');
+        if (counterEl) {
+            counterEl.innerText = `${selectedCount} / ${totalCount} selected`;
+        }
+
         const statusEl = document.getElementById('selection-status');
-        if (count > 0) {
-            statusEl.innerText = `${count + 1} images selected (Batch Mode Active)`;
-            statusEl.style.color = '#38bdf8';
-        } else {
-            statusEl.innerText = 'Grid View (Arrow keys to navigate, Shift+Click for multi-select)';
-            statusEl.style.color = '#94a3b8';
+        if (statusEl) {
+            if (selectedCount > 1) {
+                statusEl.innerText = `Batch Mode Active (${selectedCount} images targeted)`;
+                statusEl.style.color = '#38bdf8';
+            } else {
+                statusEl.innerText = 'Grid View (Arrow keys to navigate, Shift+Click for multi-select)';
+                statusEl.style.color = '#94a3b8';
+            }
         }
     }
 
@@ -431,11 +607,50 @@
         updateGridSelectionUI();
     }
 
+    function selectAllFiltered() {
+        if (filteredImages.length === 0) return;
+        multiSelectedIndices.clear();
+        const firstOriginalIdx = datasetImages.indexOf(filteredImages[0]);
+        selectedImageIndex = firstOriginalIdx;
+
+        for (let i = 1; i < filteredImages.length; i++) {
+            const originalIdx = datasetImages.indexOf(filteredImages[i]);
+            multiSelectedIndices.add(originalIdx);
+        }
+        selectImage(selectedImageIndex, false);
+        updateGridSelectionUI();
+    }
+
+    function deleteTagGlobally(tagToDelete) {
+        if (!tagToDelete) return;
+        pushUndoState();
+
+        const updates = {};
+        datasetImages.forEach(img => {
+            const initialLen = img.tags.length;
+            img.tags = img.tags.filter(t => t.toLowerCase() !== tagToDelete.toLowerCase());
+            if (img.tags.length !== initialLen) {
+                updates[img.relative_path] = img.tags.join(', ');
+            }
+        });
+
+        if (backend && Object.keys(updates).length > 0) {
+            backend.saveBatchImageTags(JSON.stringify(updates));
+        }
+
+        selectedLeftTag = null;
+        renderGlobalTagsList();
+        renderActiveTags();
+        renderGrid();
+    }
+
     function renderGlobalTagsList() {
         const container = document.getElementById('global-tags-list');
+        if (!container) return;
         container.innerHTML = '';
 
         const currentQuery = document.getElementById('filter-input').value.trim().toLowerCase();
+        const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
 
         const tagCounts = {};
         datasetImages.forEach(img => {
@@ -448,7 +663,11 @@
 
         sortedTags.forEach(([tag, count]) => {
             const isHighlighted = currentQuery && tag.toLowerCase().includes(currentQuery);
+            const isKeyword = activeKeywords.includes(tag.toLowerCase());
+            const isSelected = selectedLeftTag && selectedLeftTag.toLowerCase() === tag.toLowerCase();
+
             const item = document.createElement('div');
+            item.title = "Click: Select & Filter | Delete: Remove from all images | Ctrl+Click: Add Keyword | Shift+Click: Add to Selection";
             item.style.cssText = `
                 display: flex;
                 justify-content: space-between;
@@ -457,14 +676,58 @@
                 padding: 4px 6px;
                 cursor: pointer;
                 border-radius: 4px;
-                color: ${isHighlighted ? '#ffffff' : '#cbd5e1'};
-                background: ${isHighlighted ? 'rgba(99, 102, 241, 0.25)' : 'transparent'};
-                border-left: ${isHighlighted ? '2px solid #6366f1' : 'none'};
+                color: ${isSelected ? '#ffffff' : (isHighlighted ? '#ffffff' : '#cbd5e1')};
+                background: ${isSelected ? 'rgba(56, 189, 248, 0.3)' : (isHighlighted ? 'rgba(99, 102, 241, 0.25)' : 'transparent')};
+                border-left: ${isSelected ? '2px solid #38bdf8' : (isKeyword ? '2px solid #10b981' : (isHighlighted ? '2px solid #6366f1' : 'none'))};
             `;
             item.innerHTML = `<span>${tag}</span> <span style="color: #64748b;">${count}</span>`;
-            item.onclick = () => {
-                document.getElementById('filter-input').value = tag;
-                applyFilter();
+
+            item.onclick = (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.altKey) {
+                    removeFromKeywords(tag);
+                    e.stopPropagation();
+                } else if (e.ctrlKey || e.metaKey) {
+                    addToKeywords(tag);
+                    e.stopPropagation();
+                } else if (e.shiftKey && e.altKey) {
+                    pushUndoState();
+                    const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)].filter(idx => idx !== null);
+                    const updates = {};
+                    targets.forEach(idx => {
+                        const img = datasetImages[idx];
+                        img.tags = img.tags.filter(t => t.toLowerCase() !== tag.toLowerCase());
+                        updates[img.relative_path] = img.tags.join(', ');
+                    });
+                    if (backend && targets.length > 0) {
+                        backend.saveBatchImageTags(JSON.stringify(updates));
+                    }
+                    renderActiveTags();
+                    renderGlobalTagsList();
+                    renderGrid();
+                    e.stopPropagation();
+                } else if (e.shiftKey) {
+                    pushUndoState();
+                    const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)].filter(idx => idx !== null);
+                    const updates = {};
+                    targets.forEach(idx => {
+                        const img = datasetImages[idx];
+                        addTagToImage(img, tag);
+                        updates[img.relative_path] = img.tags.join(', ');
+                    });
+                    if (backend && targets.length > 0) {
+                        backend.saveBatchImageTags(JSON.stringify(updates));
+                    }
+                    renderActiveTags();
+                    renderGlobalTagsList();
+                    renderGrid();
+                    e.stopPropagation();
+                } else {
+                    selectedLeftTag = tag;
+                    const filterInput = document.getElementById('filter-input');
+                    filterInput.value = tag;
+                    onFilterInputChanged();
+                    renderGlobalTagsList();
+                }
             };
             container.appendChild(item);
         });
@@ -474,29 +737,48 @@
         if (selectedImageIndex === null) return;
         const img = datasetImages[selectedImageIndex];
         const container = document.getElementById('active-tags-container');
+        if (!container) return;
         container.innerHTML = '';
 
         document.getElementById('active-tag-count').innerText = `Tags (${img.tags.length})`;
         const currentQuery = document.getElementById('filter-input').value.trim().toLowerCase();
+        const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
 
         img.tags.forEach((tag, tagIdx) => {
-            const isMatch = currentQuery && tag.toLowerCase().includes(currentQuery);
+            const isKeyword = activeKeywords.includes(tag.toLowerCase());
+            const isSearchMatch = currentQuery && tag.toLowerCase().includes(currentQuery);
+
             const chip = document.createElement('span');
             chip.className = 'tag-chip';
+            chip.title = "Ctrl+Click: Add to Keywords | Ctrl+Alt+Click: Remove from Keywords";
 
-            // Highlight matching tag chips in the inspector panel
-            if (isMatch) {
+            if (isKeyword) {
+                chip.style.borderColor = '#10b981';
+                chip.style.backgroundColor = 'rgba(16, 185, 129, 0.25)';
+                chip.style.color = '#34d399';
+            } else if (isSearchMatch) {
                 chip.style.borderColor = '#38bdf8';
                 chip.style.backgroundColor = 'rgba(56, 189, 248, 0.25)';
                 chip.style.color = '#ffffff';
             }
 
-            chip.innerHTML = `${tag} <span title="Remove tag">×</span>`;
+            chip.innerHTML = `${tag} <span title="Remove tag from image">×</span>`;
+
+            chip.onclick = (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.altKey) {
+                    removeFromKeywords(tag);
+                    e.stopPropagation();
+                } else if (e.ctrlKey || e.metaKey) {
+                    addToKeywords(tag);
+                    e.stopPropagation();
+                }
+            };
 
             chip.querySelector('span').onclick = (e) => {
                 e.stopPropagation();
                 removeTagFromSelection(tag);
             };
+
             container.appendChild(chip);
         });
 
@@ -505,16 +787,14 @@
 
     function addTagToSelection(newTag) {
         if (!newTag || selectedImageIndex === null) return;
+        pushUndoState();
 
-        // Target primary image + all multi-selected images
         const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
         const updates = {};
 
         targets.forEach(idx => {
             const img = datasetImages[idx];
-            if (!img.tags.includes(newTag)) {
-                img.tags.push(newTag);
-            }
+            addTagToImage(img, newTag);
             updates[img.relative_path] = img.tags.join(', ');
         });
 
@@ -528,6 +808,7 @@
 
     function removeTagFromSelection(tagToRemove) {
         if (selectedImageIndex === null) return;
+        pushUndoState();
 
         const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
         const updates = {};
@@ -546,6 +827,44 @@
         renderGrid();
     }
 
+    function addToKeywords(tag) {
+        if (!keywordsInput) return;
+        pushUndoState();
+        const currentVal = keywordsInput.value.trim();
+        let keywordsList = currentVal ? currentVal.split(',').map(k => k.trim()).filter(k => k.length > 0) : [];
+
+        const lowerTag = tag.toLowerCase();
+        if (!keywordsList.map(k => k.toLowerCase()).includes(lowerTag)) {
+            keywordsList.push(tag);
+            keywordsInput.value = keywordsList.join(', ');
+            renderActiveTags();
+            renderGlobalTagsList();
+            if (backend) {
+                backend.saveDatasetSettings(keywordsInput.value);
+            }
+        }
+    }
+
+    function removeFromKeywords(tag) {
+        if (!keywordsInput) return;
+        const currentVal = keywordsInput.value.trim();
+        if (!currentVal) return;
+        pushUndoState();
+
+        let keywordsList = currentVal.split(',').map(k => k.trim()).filter(k => k.length > 0);
+        const lowerTag = tag.toLowerCase();
+        const updatedList = keywordsList.filter(k => k.toLowerCase() !== lowerTag);
+
+        if (updatedList.length !== keywordsList.length) {
+            keywordsInput.value = updatedList.join(', ');
+            renderActiveTags();
+            renderGlobalTagsList();
+            if (backend) {
+                backend.saveDatasetSettings(keywordsInput.value);
+            }
+        }
+    }
+
     function updateTokenDisplay(tagsString) {
         if (!backend) return;
         backend.estimateTokens(tagsString, function(count) {
@@ -557,79 +876,169 @@
         });
     }
 
+    function applyKeywordsToSelectionBtn() {
+        if (!keywordsInput) return;
+        const val = keywordsInput.value.trim();
+        if (val && selectedImageIndex !== null) {
+            applyKeywordsToSelection(val);
+        }
+    }
+
+    function applyKeywordsToSelection(keywordsStr) {
+        if (!keywordsStr || selectedImageIndex === null) return;
+        const rawKeywords = keywordsStr.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0);
+        if (rawKeywords.length === 0) return;
+
+        pushUndoState();
+        const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
+        const updates = {};
+
+        targets.forEach(idx => {
+            const img = datasetImages[idx];
+            const currentTags = [...img.tags];
+            const remainingTags = currentTags.filter(t => !rawKeywords.includes(t.toLowerCase()));
+            img.tags = [...rawKeywords, ...remainingTags];
+            updates[img.relative_path] = img.tags.join(', ');
+        });
+
+        if (backend) {
+            backend.saveBatchImageTags(JSON.stringify(updates));
+        }
+        renderActiveTags();
+        renderGlobalTagsList();
+        renderGrid();
+    }
+
+    function applyKeywordsToAll() {
+        if (!keywordsInput) return;
+        const keywordsStr = keywordsInput.value.trim();
+        const rawKeywords = keywordsStr.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0);
+        if (rawKeywords.length === 0 || datasetImages.length === 0) return;
+
+        pushUndoState();
+        const updates = {};
+
+        datasetImages.forEach(img => {
+            const currentTags = [...img.tags];
+            const remainingTags = currentTags.filter(t => !rawKeywords.includes(t.toLowerCase()));
+            img.tags = [...rawKeywords, ...remainingTags];
+            updates[img.relative_path] = img.tags.join(', ');
+        });
+
+        if (backend) {
+            backend.saveBatchImageTags(JSON.stringify(updates));
+        }
+
+        renderActiveTags();
+        renderGlobalTagsList();
+        renderGrid();
+    }
+
     // --- Autocomplete & Tag Input Logic ---
     const tagInput = document.getElementById('tag-input');
     const autoBox = document.getElementById('autocomplete-box');
 
-    tagInput.addEventListener('input', function() {
-        const val = this.value.trim().toLowerCase();
-        if (!val) {
-            autoBox.style.display = 'none';
-            return;
-        }
-
-        // Collect all unique dataset tags
-        const allTags = new Set();
-        datasetImages.forEach(img => img.tags.forEach(t => allTags.add(t)));
-
-        const matches = Array.from(allTags).filter(t => t.includes(val) && t !== val).slice(0, 6);
-        if (matches.length === 0) {
-            autoBox.style.display = 'none';
-            return;
-        }
-
-        autoBox.innerHTML = '';
-        matches.forEach(match => {
-            const div = document.createElement('div');
-            div.className = 'autocomplete-item';
-            div.innerText = match;
-            div.onclick = () => {
-                tagInput.value = match;
-                autoBox.style.display = 'none';
-                tagInput.focus();
-            };
-            autoBox.appendChild(div);
-        });
-        autoBox.style.display = 'block';
-    });
-
-    tagInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
+    if (tagInput) {
+        tagInput.addEventListener('input', function() {
             const val = this.value.trim().toLowerCase();
-            if (val) {
-                addTagToSelection(val);
-                this.value = '';
+            if (!val) {
+                autoBox.style.display = 'none';
+                return;
+            }
+
+            const allTags = new Set();
+            datasetImages.forEach(img => img.tags.forEach(t => allTags.add(t)));
+
+            const matches = Array.from(allTags).filter(t => t.includes(val) && t !== val).slice(0, 6);
+            if (matches.length === 0) {
+                autoBox.style.display = 'none';
+                return;
+            }
+
+            autoBox.innerHTML = '';
+            matches.forEach(match => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                div.innerText = match;
+                div.onclick = () => {
+                    tagInput.value = match;
+                    autoBox.style.display = 'none';
+                    tagInput.focus();
+                };
+                autoBox.appendChild(div);
+            });
+            autoBox.style.display = 'block';
+        });
+
+        tagInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const val = this.value.trim().toLowerCase();
+                if (val) {
+                    addTagToSelection(val);
+                    this.value = '';
+                    autoBox.style.display = 'none';
+                }
+            } else if (e.key === 'Escape') {
                 autoBox.style.display = 'none';
             }
-        } else if (e.key === 'Escape') {
-            autoBox.style.display = 'none';
-        }
-    });
+        });
+    }
 
-    // --- Global Keyboard Navigation ---
+    // --- Global Keyboard Shortcuts ---
     document.addEventListener('keydown', function(e) {
-        // If typing in inputs, let default behavior happen (except Escape)
-        const activeTaggingInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input');
+        const activeInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input') || document.activeElement === keywordsInput;
+
+        // Ctrl+Z / Cmd+Z: Undo
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            performUndo();
+            return;
+        }
+
+        // Delete / Backspace: Delete selected left panel tag globally
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !activeInput && selectedLeftTag) {
+            e.preventDefault();
+            deleteTagGlobally(selectedLeftTag);
+            return;
+        }
+
+        // Ctrl+A / Cmd+A: Select All Filtered
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !activeInput) {
+            e.preventDefault();
+            selectAllFiltered();
+            return;
+        }
+
+        // Ctrl+D / Cmd+D: Deselect All
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+            e.preventDefault();
+            clearMultiSelection();
+            selectedImageIndex = null;
+            document.getElementById('selected-filename').innerText = "No image selected";
+            document.getElementById('active-tags-container').innerHTML = '';
+            document.getElementById('active-tag-count').innerText = "Tags (0)";
+            updateGridSelectionUI();
+            return;
+        }
 
         if (e.key === 'Escape') {
             document.activeElement.blur();
-            autoBox.style.display = 'none';
+            selectedLeftTag = null;
+            renderGlobalTagsList();
+            if (autoBox) autoBox.style.display = 'none';
             clearMultiSelection();
             return;
         }
 
-        if (activeTaggingInput) return;
-
+        if (activeInput) return;
         if (filteredImages.length === 0) return;
 
         let currentFilteredIdx = filteredImages.findIndex(img => datasetImages.indexOf(img) === selectedImageIndex);
         if (currentFilteredIdx === -1) currentFilteredIdx = 0;
 
-        // Estimate columns based on grid width
         const gridEl = document.getElementById('image-grid');
-        const cardWidth = 200 + 16; // width + gap
+        const cardWidth = 200 + 16;
         const cols = Math.max(1, Math.floor(gridEl.clientWidth / cardWidth));
-
         let nextFilteredIdx = currentFilteredIdx;
 
         if (e.key === 'ArrowRight') {
@@ -645,7 +1054,7 @@
             nextFilteredIdx = Math.max(0, currentFilteredIdx - cols);
             e.preventDefault();
         } else if (e.key === 'Enter') {
-            tagInput.focus();
+            if (tagInput) tagInput.focus();
             e.preventDefault();
             return;
         }
@@ -654,7 +1063,6 @@
             const targetOriginalIdx = datasetImages.indexOf(filteredImages[nextFilteredIdx]);
             selectImage(targetOriginalIdx, true);
 
-            // Scroll selected card into view smoothly
             const cardNode = gridEl.children[nextFilteredIdx];
             if (cardNode) {
                 cardNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
