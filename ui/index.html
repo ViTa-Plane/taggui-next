@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TagGUI Next - Dataset Manager</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0b0c10;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #121318; }
+    ::-webkit-scrollbar-thumb { background: #2a2d3d; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3d4259; }
+
+    header {
+      height: 52px;
+      background-color: #12141c;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .text-input {
+      background-color: #181a24;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 6px 12px;
+      color: #e2e8f0;
+      font-size: 12px;
+      font-family: monospace;
+      outline: none;
+      width: 100%;
+    }
+    .text-input:focus { border-color: #6366f1; }
+
+    .workspace { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+    aside { background-color: #12141c; display: flex; flex-direction: column; flex-shrink: 0; }
+    .left-panel { width: 256px; border-right: 1px solid rgba(255, 255, 255, 0.08); }
+    .right-panel { width: 320px; border-left: 1px solid rgba(255, 255, 255, 0.08); }
+    main { flex: 1; display: flex; flex-direction: column; background-color: #0b0c10; min-width: 0; min-height: 0; overflow: hidden; }
+
+    .panel-header {
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .grid-header {
+      height: 40px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #94a3b8;
+      flex-shrink: 0;
+    }
+    .image-grid {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, 200px);
+      gap: 16px;
+      align-content: start;
+      justify-content: start;
+    }
+
+    .image-card {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      flex-shrink: 0;
+      background-color: #0d0e12;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 2px solid #27272a;
+      cursor: pointer;
+      transition: border-color 0.1s, box-shadow 0.1s;
+    }
+    .image-card:hover { border-color: #52525b; }
+    .image-card.selected {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+    }
+    .image-card.multi-selected {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+    }
+
+    .image-card img {
+      width: 200px;
+      height: 200px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .badge-filename {
+      position: absolute;
+      top: 6px; left: 6px;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-family: monospace;
+      color: #cbd5e1;
+      max-width: 80%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .badge-tagged {
+      position: absolute;
+      bottom: 6px; right: 6px;
+      background: rgba(16, 185, 129, 0.9);
+      color: #000;
+      font-weight: bold;
+      font-size: 8px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+
+    .container-pad { padding: 12px; }
+    .tags-container { padding: 12px; overflow-y: auto; flex: 1; min-height: 0; }
+    .tag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .tag-chip {
+      background-color: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-family: monospace;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tag-chip span { cursor: pointer; color: #818cf8; }
+    .tag-chip span:hover { color: #f87171; }
+
+    /* Autocomplete dropdown */
+    .autocomplete-box {
+      position: absolute;
+      top: 100%; left: 0; right: 0;
+      background: #181a24;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      margin-top: 4px;
+      max-height: 150px;
+      overflow-y: auto;
+      z-index: 100;
+      display: none;
+    }
+    .autocomplete-item {
+      padding: 6px 10px;
+      font-size: 11px;
+      font-family: monospace;
+      cursor: pointer;
+      color: #cbd5e1;
+    }
+    .autocomplete-item:hover, .autocomplete-item.active {
+      background: rgba(99, 102, 241, 0.25);
+      color: #fff;
+    }
+
+    .token-box {
+      background-color: #181a24;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">T</div>
+      <div>
+        <h1 style="font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+          TagGUI <span style="font-size: 9px; background: rgba(99,102,241,0.2); color: #818cf8; padding: 1px 5px; border-radius: 4px; font-family: monospace; border: 1px solid rgba(99,102,241,0.3);">NEXT</span>
+        </h1>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <p id="dataset-path-label" style="font-size: 10px; color: #94a3b8; font-family: monospace; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading...</p>
+          <button onclick="browseFolder()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 1px 6px; border-radius: 4px; cursor: pointer;">Change</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex: 1; max-width: 450px; margin: 0 24px; position: relative;">
+      <input id="filter-input" type="text" placeholder='Filter (e.g. tag:cat, "untgr"), Ctrl+F...' class="text-input" oninput="applyFilter()" />
+      <div style="position: absolute; right: 8px; top: 6px; font-size: 10px; color: #94a3b8; background: #12141c; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08);">
+        <span id="image-count">0</span> / <span id="total-count">0</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="left-panel">
+      <div class="panel-header"><span>Dataset Tags</span></div>
+      <div id="global-tags-list" class="tags-container"></div>
+    </aside>
+
+    <main>
+      <div class="grid-header">
+        <span id="selection-status">Grid View (Arrow keys to navigate, Shift+Click for multi-select)</span>
+        <button onclick="clearMultiSelection()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Clear Selection</button>
+      </div>
+      <div id="image-grid" class="image-grid"></div>
+    </main>
+
+    <aside class="right-panel">
+      <div class="panel-header">
+        <span>Selected Image</span>
+        <span id="selected-filename" style="font-size: 10px; color: #64748b; font-family: monospace; font-weight: normal;">No image selected</span>
+      </div>
+
+      <div class="container-pad" style="border-bottom: 1px solid rgba(255,255,255,0.08); position: relative;">
+        <input id="tag-input" type="text" placeholder="Add tag... (Press Enter)" class="text-input" autocomplete="off" />
+        <div id="autocomplete-box" class="autocomplete-box"></div>
+      </div>
+
+      <div class="tags-container">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span id="active-tag-count" style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase;">Tags (0)</span>
+          </div>
+          <div id="active-tags-container" class="tag-chips"></div>
+        </div>
+
+        <div class="token-box">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-bottom: 6px;">
+            <span>Estimated Token Context</span>
+            <span id="token-label" style="font-family: monospace; color: #818cf8;">0 / 75</span>
+          </div>
+          <div style="width: 100%; background-color: #0b0c10; height: 6px; border-radius: 9999px; overflow: hidden;">
+            <div id="token-progress" style="background-color: #6366f1; height: 100%; width: 0%; transition: width 0.2s, background-color 0.2s;"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script>
+    let backend = null;
+    let datasetImages = [];
+    let filteredImages = [];
+    let selectedImageIndex = null;
+    let multiSelectedIndices = new Set();
+    let lastClickedIndex = null;
+
+    new QWebChannel(qt.webChannelTransport, function(channel) {
+        backend = channel.objects.backend;
+        fetchDataset();
+    });
+
+    function fetchDataset() {
+        if (!backend) return;
+        backend.getDatasetImages(function(response) {
+            datasetImages = JSON.parse(response);
+            filteredImages = [...datasetImages];
+            updateDatasetUI();
+        });
+    }
+
+    function browseFolder() {
+        if (!backend) return;
+        backend.browseDatasetFolder(function(response) {
+            if (!response) return;
+            datasetImages = JSON.parse(response);
+            filteredImages = [...datasetImages];
+            document.getElementById('image-grid').innerHTML = '';
+            selectedImageIndex = null;
+            multiSelectedIndices.clear();
+            updateDatasetUI();
+        });
+    }
+
+    function updateDatasetUI() {
+        document.getElementById('total-count').innerText = datasetImages.length;
+        document.getElementById('image-count').innerText = filteredImages.length;
+        document.getElementById('dataset-path-label').innerText = backend.dataset_path || "Dataset";
+
+        renderGlobalTagsList();
+        renderGrid();
+        if (filteredImages.length > 0 && selectedImageIndex === null) {
+            selectImage(0, false);
+        }
+    }
+
+    function applyFilter() {
+        const query = document.getElementById('filter-input').value.trim().toLowerCase();
+
+        if (!query) {
+            filteredImages = [...datasetImages];
+        } else if (query === 'untagged') {
+            filteredImages = datasetImages.filter(img => img.tags.length === 0);
+        } else {
+            // Automatically searches both filenames and tags without needing any prefix
+            filteredImages = datasetImages.filter(img =>
+                img.filename.toLowerCase().includes(query) ||
+                img.tags.some(t => t.toLowerCase().includes(query))
+            );
+        }
+
+        document.getElementById('image-count').innerText = filteredImages.length;
+        document.getElementById('image-grid').innerHTML = '';
+
+        multiSelectedIndices.clear();
+        if (filteredImages.length > 0) {
+            const firstOriginalIdx = datasetImages.indexOf(filteredImages[0]);
+            selectImage(firstOriginalIdx, true);
+        } else {
+            selectedImageIndex = null;
+            document.getElementById('selected-filename').innerText = "No image found";
+            document.getElementById('active-tags-container').innerHTML = '';
+            document.getElementById('active-tag-count').innerText = "Tags (0)";
+        }
+
+        renderGrid();
+    }
+
+    function renderGrid() {
+        const grid = document.getElementById('image-grid');
+        grid.innerHTML = '';
+
+        filteredImages.forEach((img, filteredIdx) => {
+            const originalIdx = datasetImages.indexOf(img);
+            const isSelected = selectedImageIndex === originalIdx;
+            const isMultiSelected = multiSelectedIndices.has(originalIdx);
+            const hasTags = img.tags.length > 0;
+
+            const card = document.createElement('div');
+            card.className = `image-card ${isSelected ? 'selected' : ''} ${isMultiSelected ? 'multi-selected' : ''}`;
+            card.dataset.index = originalIdx;
+
+            card.innerHTML = `
+                <img src="${img.url}" loading="lazy" onerror="this.style.display='none'" />
+                <div class="badge-filename">${img.filename}</div>
+                <div class="badge-tagged" style="display: ${hasTags ? 'block' : 'none'};">TAGGED</div>
+            `;
+
+            card.onclick = (e) => {
+                if (e.shiftKey && lastClickedIndex !== null) {
+                    // Range multi-select
+                    const start = Math.min(lastClickedIndex, originalIdx);
+                    const end = Math.max(lastClickedIndex, originalIdx);
+                    for (let i = start; i <= end; i++) {
+                        multiSelectedIndices.add(i);
+                    }
+                } else if (e.ctrlKey || e.metaKey) {
+                    // Toggle multi-select
+                    if (multiSelectedIndices.has(originalIdx)) {
+                        multiSelectedIndices.delete(originalIdx);
+                    } else {
+                        multiSelectedIndices.add(originalIdx);
+                    }
+                } else {
+                    multiSelectedIndices.clear();
+                    selectImage(originalIdx, true);
+                }
+                lastClickedIndex = originalIdx;
+                updateGridSelectionUI();
+            };
+
+            grid.appendChild(card);
+        });
+        updateSelectionStatusText();
+    }
+
+    function selectImage(idx, updateUI = true) {
+        selectedImageIndex = idx;
+        const img = datasetImages.idx || datasetImages[idx];
+        if (!img) return;
+
+        document.getElementById('selected-filename').innerText = img.filename;
+        renderActiveTags();
+        if (updateUI) updateGridSelectionUI();
+    }
+
+    function updateGridSelectionUI() {
+        const grid = document.getElementById('image-grid');
+        Array.from(grid.children).forEach(card => {
+            const idx = parseInt(card.dataset.index);
+            card.classList.toggle('selected', idx === selectedImageIndex);
+            card.classList.toggle('multi-selected', multiSelectedIndices.has(idx));
+        });
+        updateSelectionStatusText();
+    }
+
+    function updateSelectionStatusText() {
+        const count = multiSelectedIndices.size;
+        const statusEl = document.getElementById('selection-status');
+        if (count > 0) {
+            statusEl.innerText = `${count + 1} images selected (Batch Mode Active)`;
+            statusEl.style.color = '#38bdf8';
+        } else {
+            statusEl.innerText = 'Grid View (Arrow keys to navigate, Shift+Click for multi-select)';
+            statusEl.style.color = '#94a3b8';
+        }
+    }
+
+    function clearMultiSelection() {
+        multiSelectedIndices.clear();
+        updateGridSelectionUI();
+    }
+
+    function renderGlobalTagsList() {
+        const container = document.getElementById('global-tags-list');
+        container.innerHTML = '';
+
+        const currentQuery = document.getElementById('filter-input').value.trim().toLowerCase();
+
+        const tagCounts = {};
+        datasetImages.forEach(img => {
+            img.tags.forEach(tag => {
+                tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+            });
+        });
+
+        const sortedTags = Object.entries(tagCounts).sort((a,b) => b[1] - a[1]);
+
+        sortedTags.forEach(([tag, count]) => {
+            const isHighlighted = currentQuery && tag.toLowerCase().includes(currentQuery);
+            const item = document.createElement('div');
+            item.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                font-size: 11px;
+                font-family: monospace;
+                padding: 4px 6px;
+                cursor: pointer;
+                border-radius: 4px;
+                color: ${isHighlighted ? '#ffffff' : '#cbd5e1'};
+                background: ${isHighlighted ? 'rgba(99, 102, 241, 0.25)' : 'transparent'};
+                border-left: ${isHighlighted ? '2px solid #6366f1' : 'none'};
+            `;
+            item.innerHTML = `<span>${tag}</span> <span style="color: #64748b;">${count}</span>`;
+            item.onclick = () => {
+                document.getElementById('filter-input').value = tag;
+                applyFilter();
+            };
+            container.appendChild(item);
+        });
+    }
+
+    function renderActiveTags() {
+        if (selectedImageIndex === null) return;
+        const img = datasetImages[selectedImageIndex];
+        const container = document.getElementById('active-tags-container');
+        container.innerHTML = '';
+
+        document.getElementById('active-tag-count').innerText = `Tags (${img.tags.length})`;
+        const currentQuery = document.getElementById('filter-input').value.trim().toLowerCase();
+
+        img.tags.forEach((tag, tagIdx) => {
+            const isMatch = currentQuery && tag.toLowerCase().includes(currentQuery);
+            const chip = document.createElement('span');
+            chip.className = 'tag-chip';
+
+            // Highlight matching tag chips in the inspector panel
+            if (isMatch) {
+                chip.style.borderColor = '#38bdf8';
+                chip.style.backgroundColor = 'rgba(56, 189, 248, 0.25)';
+                chip.style.color = '#ffffff';
+            }
+
+            chip.innerHTML = `${tag} <span title="Remove tag">×</span>`;
+
+            chip.querySelector('span').onclick = (e) => {
+                e.stopPropagation();
+                removeTagFromSelection(tag);
+            };
+            container.appendChild(chip);
+        });
+
+        updateTokenDisplay(img.tags.join(', '));
+    }
+
+    function addTagToSelection(newTag) {
+        if (!newTag || selectedImageIndex === null) return;
+
+        // Target primary image + all multi-selected images
+        const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
+        const updates = {};
+
+        targets.forEach(idx => {
+            const img = datasetImages[idx];
+            if (!img.tags.includes(newTag)) {
+                img.tags.push(newTag);
+            }
+            updates[img.relative_path] = img.tags.join(', ');
+        });
+
+        if (backend) {
+            backend.saveBatchImageTags(JSON.stringify(updates));
+        }
+        renderActiveTags();
+        renderGlobalTagsList();
+        renderGrid();
+    }
+
+    function removeTagFromSelection(tagToRemove) {
+        if (selectedImageIndex === null) return;
+
+        const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
+        const updates = {};
+
+        targets.forEach(idx => {
+            const img = datasetImages[idx];
+            img.tags = img.tags.filter(t => t !== tagToRemove);
+            updates[img.relative_path] = img.tags.join(', ');
+        });
+
+        if (backend) {
+            backend.saveBatchImageTags(JSON.stringify(updates));
+        }
+        renderActiveTags();
+        renderGlobalTagsList();
+        renderGrid();
+    }
+
+    function updateTokenDisplay(tagsString) {
+        if (!backend) return;
+        backend.estimateTokens(tagsString, function(count) {
+            document.getElementById('token-label').innerText = `${count} / 75`;
+            const pct = Math.min((count / 75) * 100, 100);
+            const bar = document.getElementById('token-progress');
+            bar.style.width = `${pct}%`;
+            bar.style.backgroundColor = count > 75 ? '#ef4444' : '#6366f1';
+        });
+    }
+
+    // --- Autocomplete & Tag Input Logic ---
+    const tagInput = document.getElementById('tag-input');
+    const autoBox = document.getElementById('autocomplete-box');
+
+    tagInput.addEventListener('input', function() {
+        const val = this.value.trim().toLowerCase();
+        if (!val) {
+            autoBox.style.display = 'none';
+            return;
+        }
+
+        // Collect all unique dataset tags
+        const allTags = new Set();
+        datasetImages.forEach(img => img.tags.forEach(t => allTags.add(t)));
+
+        const matches = Array.from(allTags).filter(t => t.includes(val) && t !== val).slice(0, 6);
+        if (matches.length === 0) {
+            autoBox.style.display = 'none';
+            return;
+        }
+
+        autoBox.innerHTML = '';
+        matches.forEach(match => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.innerText = match;
+            div.onclick = () => {
+                tagInput.value = match;
+                autoBox.style.display = 'none';
+                tagInput.focus();
+            };
+            autoBox.appendChild(div);
+        });
+        autoBox.style.display = 'block';
+    });
+
+    tagInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            const val = this.value.trim().toLowerCase();
+            if (val) {
+                addTagToSelection(val);
+                this.value = '';
+                autoBox.style.display = 'none';
+            }
+        } else if (e.key === 'Escape') {
+            autoBox.style.display = 'none';
+        }
+    });
+
+    // --- Global Keyboard Navigation ---
+    document.addEventListener('keydown', function(e) {
+        // If typing in inputs, let default behavior happen (except Escape)
+        const activeTaggingInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input');
+
+        if (e.key === 'Escape') {
+            document.activeElement.blur();
+            autoBox.style.display = 'none';
+            clearMultiSelection();
+            return;
+        }
+
+        if (activeTaggingInput) return;
+
+        if (filteredImages.length === 0) return;
+
+        let currentFilteredIdx = filteredImages.findIndex(img => datasetImages.indexOf(img) === selectedImageIndex);
+        if (currentFilteredIdx === -1) currentFilteredIdx = 0;
+
+        // Estimate columns based on grid width
+        const gridEl = document.getElementById('image-grid');
+        const cardWidth = 200 + 16; // width + gap
+        const cols = Math.max(1, Math.floor(gridEl.clientWidth / cardWidth));
+
+        let nextFilteredIdx = currentFilteredIdx;
+
+        if (e.key === 'ArrowRight') {
+            nextFilteredIdx = Math.min(filteredImages.length - 1, currentFilteredIdx + 1);
+            e.preventDefault();
+        } else if (e.key === 'ArrowLeft') {
+            nextFilteredIdx = Math.max(0, currentFilteredIdx - 1);
+            e.preventDefault();
+        } else if (e.key === 'ArrowDown') {
+            nextFilteredIdx = Math.min(filteredImages.length - 1, currentFilteredIdx + cols);
+            e.preventDefault();
+        } else if (e.key === 'ArrowUp') {
+            nextFilteredIdx = Math.max(0, currentFilteredIdx - cols);
+            e.preventDefault();
+        } else if (e.key === 'Enter') {
+            tagInput.focus();
+            e.preventDefault();
+            return;
+        }
+
+        if (nextFilteredIdx !== currentFilteredIdx) {
+            const targetOriginalIdx = datasetImages.indexOf(filteredImages[nextFilteredIdx]);
+            selectImage(targetOriginalIdx, true);
+
+            // Scroll selected card into view smoothly
+            const cardNode = gridEl.children[nextFilteredIdx];
+            if (cardNode) {
+                cardNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+    });
+  </script>
+</body>
+</html>
