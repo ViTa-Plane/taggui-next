@@ -79,5 +79,6 @@ To change the interrogator settings click the settings button
 - run install.bat to automatically set the python_embeded and to  install the requirements (about 3.72GB)
 - start the TagGUI-Next with run.bat
 - on first use of the auto-tagger, the app will download the selected interrogator (wd-eva02-large-tagger-v3) to huggingface hub directory (1.2GB for SmilingWolf)
+- it's tested on Python 3.13.15 ,torch 2.14.1+cu130, torchvision 0.29.1+cu130
     
 
