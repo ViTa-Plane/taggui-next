@@ -1078,6 +1078,31 @@
 
             chip.innerHTML = `${tag} <span title="Remove tag from image">×</span>`;
 
+            // --- Double-Click to Edit Tag ---
+            chip.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                const newTagVal = prompt("Edit tag:", tag);
+                if (newTagVal === null) return; // User cancelled
+
+                const trimmedNew = newTagVal.trim().toLowerCase();
+                if (!trimmedNew || trimmedNew === tag.toLowerCase()) return;
+
+                pushUndoState();
+
+                // Update tag at specific index and clean/deduplicate
+                img.tags[tagIdx] = trimmedNew;
+                img.tags = cleanImageTags(img.tags);
+
+                if (backend) {
+                    backend.saveImageTags(img.relative_path, img.tags.join(', '));
+                }
+
+                renderActiveTags();
+                renderGlobalTagsList();
+                renderGrid();
+            });
+
+            // --- Drag Handlers ---
             chip.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', tagIdx.toString());
                 e.dataTransfer.effectAllowed = 'move';
