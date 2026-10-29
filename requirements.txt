@@ -3,6 +3,7 @@ pillow
 send2trash
 requests
 timm
+# installs torch with CUDA support, comment the line for CPU only torch
 --index-url https://download.pytorch.org/whl/cu130
 torch
 torchvision
