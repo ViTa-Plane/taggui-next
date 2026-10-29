@@ -56,7 +56,7 @@ In addition to manual tagging, you can automatically generate captions or tags
 for your images inside ***TagGUI-Next***.
 
 The image interrogator is hardcoded to SmilingWolf/wd-eva02-large-tagger-v3 model,
-It will be downloaded automatically in the first use (about 2GB, be patient and wait it to be instaled )
+It will be downloaded automatically in the first use (about 1.2GB, be patient and wait it to be instaled )
 
 GPU generation requires a compatible NVIDIA GPU, and CPU generation is also
 supported as a fallback. If you have supported CUDA GPU and the GPU acceleration don't work, your installed pytorch is CPU only version.
