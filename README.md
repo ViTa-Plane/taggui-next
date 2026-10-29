@@ -2,9 +2,9 @@
 
 <img src='icon.png' alt='TagGUI-Next icon' width='128'>
 
-**TagGUI-Next** is a fast, modern, and self-contained local dataset manager and tagger built with **PySide6**, **PyTorch**, and **timm**. Designed to replace unstable external APIs, it provides an intuitive HTML5/JavaScript GUI powered by `QWebChannel` for effortless tagging, bulk editing, and dataset organization for machine learning models (such as Stable Diffusion).
+**TagGUI-Next** is a fast, modern, and self-contained local dataset manager and tagger built with **PySide6**, **PyTorch**, and **timm**. Designed to replace aging TagGUI. It provides an intuitive HTML5/JavaScript GUI powered by `QWebChannel` for effortless tagging, bulk editing, and dataset organization for machine learning models (such as Stable Diffusion).
 
-**TagGUI-Next's** image uses local SmilingWolf / wd-eva02-large-tagger-v3  image interrogator model, best  for image datasets preparation for Pony XL v6/ Illustrious/ NoobAi and SDXL 1.0 LoRa Training
+**TagGUI-Next's** uses hardcoded SmilingWolf / wd-eva02-large-tagger-v3 for an image interrogator, It's best for danbooru/e621 style tags, useful in preparation of image datasets for LoRa Training (for Pony XL v6/ Illustrious/ NoobAi and SDXL 1.0). 
 
 ---
 
@@ -76,7 +76,8 @@ To change the interrogator settings click the settings button
      git clone https://github.com/ViTa-Plane/taggui-next.git
      cd taggui-next
   ```
-- run install.bat to automatically set the python_embeded and to  install the requirements
+- run install.bat to automatically set the python_embeded and to  install the requirements (about 3.72GB)
 - start the TagGUI-Next with run.bat
+- on first use of the auto-tagger, the app will download the selected interrogator (wd-eva02-large-tagger-v3) to huggingface hub directory (1.2GB for SmilingWolf)
     
 
