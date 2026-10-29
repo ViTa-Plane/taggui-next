@@ -186,3 +186,4 @@ run python embeded.bat
 /.idea
 ui/test gui.html
 last_dataset.json
+/test
