@@ -1,3 +1,9 @@
 PySide6
 pillow
 send2trash
+requests
+timm
+--index-url https://download.pytorch.org/whl/cu130
+torch
+torchvision
+huggingface_hub

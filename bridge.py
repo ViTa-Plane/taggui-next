@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image
 from PySide6.QtCore import QObject, Slot, Signal, Property
 from PySide6.QtWidgets import QFileDialog
+import hashlib
 
 
 class TagGUIBridge(QObject):
@@ -14,9 +15,6 @@ class TagGUIBridge(QObject):
         # Check global config or local fallback for the last opened dataset path
         initial_path = dataset_path
         if not initial_path:
-            # Look for a global config or check default settings
-            default_settings = Path.cwd() / "sample_dataset" / "settings.json"
-            # Alternatively, check a app-level config file for last path
             config_path = Path.cwd() / "last_dataset.json"
             if config_path.exists():
                 try:
@@ -37,6 +35,9 @@ class TagGUIBridge(QObject):
 
         # Save current path as last opened
         self._save_last_path_config()
+
+        # Run automatic thumbnail cleanup on startup
+        self.cleanupThumbnails()
 
     def _save_last_path_config(self):
         try:
@@ -63,6 +64,9 @@ class TagGUIBridge(QObject):
             self.thumbs_dir.mkdir(exist_ok=True)
             print(f"[Backend] Switched dataset path to: {self._dataset_path}")
 
+            # Automatically run garbage collection on thumbnail folder
+            self.cleanupThumbnails()
+
             # Save to last dataset config
             self._save_last_path_config()
 
@@ -78,19 +82,34 @@ class TagGUIBridge(QObject):
                 return settings_path.read_text(encoding="utf-8")
             except Exception as e:
                 print(f"[Backend] Failed to read settings.json: {e}")
-        return json.dumps({"keywords": ""})
+        # Default settings including thresholds for local auto-tagging
+        return json.dumps({
+            "keywords": "",
+            "general_threshold": 0.35,
+            "character_threshold": 0.85
+        })
 
     @Slot(str)
-    def saveDatasetSettings(self, keywords_str):
+    def saveDatasetSettings(self, settings_json_str):
         settings_path = self._dataset_path / "settings.json"
         try:
-            data = {"keywords": keywords_str}
+            # Accepts either a raw string of keywords or a full JSON settings object from UI
+            if settings_json_str.strip().startswith("{"):
+                data = json.loads(settings_json_str)
+            else:
+                # Fallback if only keywords string was passed
+                existing = {}
+                if settings_path.exists():
+                    existing = json.loads(settings_path.read_text(encoding="utf-8"))
+                existing["keywords"] = settings_json_str
+                data = existing
+
             settings_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            print("[Backend] Dataset settings saved successfully.")
         except Exception as e:
             print(f"[Backend] Failed to write settings.json: {e}")
 
     def _scan_images(self):
-        # (Keep your existing _scan_images implementation unchanged)
         images = []
         valid_exts = {".png", ".jpg", ".jpeg", ".webp"}
 
@@ -106,17 +125,18 @@ class TagGUIBridge(QObject):
                     else ""
                 )
 
-                thumb_filename = f"{f.stem}_{abs(hash(str(f)))}.webp"
-                thumb_path = self.thumbs_dir / thumb_filename
+                thumb_path = self._get_thumbnail_path(f)
 
                 if not thumb_path.exists() or thumb_path.stat().st_mtime < f.stat().st_mtime:
                     try:
                         with Image.open(f) as img:
-                            img.thumbnail((200, 200))
-                            img.save(thumb_path, "WEBP", quality=85)
+                            img.thumbnail((300, 300))
+                            if img.mode in ("RGBA", "P"):
+                                img = img.convert("RGB")
+                            thumb_path.parent.mkdir(exist_ok=True, parents=True)
+                            img.save(thumb_path, "JPEG", quality=85)
                     except Exception as e:
                         print(f"[Backend] Thumbnail generation failed for {f.name}: {e}")
-                        thumb_path = f
 
                 rel_path = f.relative_to(self._dataset_path)
 
@@ -157,11 +177,9 @@ class TagGUIBridge(QObject):
             img_path = self._dataset_path / relative_path
             txt_path = img_path.with_suffix(".txt")
 
-            # Create hidden backup folder for undo restoration
             backup_dir = self._dataset_path / ".taggui_backup"
             backup_dir.mkdir(exist_ok=True)
 
-            # Move image and txt to backup dir instead of permanent loss
             if img_path.exists():
                 import shutil
                 shutil.move(str(img_path), str(backup_dir / img_path.name))
@@ -214,3 +232,154 @@ class TagGUIBridge(QObject):
                     print(f"[Backend] Opened folder in explorer: {path_obj}")
         except Exception as e:
             print(f"[Backend] Failed to open dataset folder: {e}")
+
+    def _get_thumbnail_path(self, img_path: Path) -> Path:
+        """Generates a stable, unique thumbnail path based on the image's relative path and mtime."""
+        thumbs_dir = self._dataset_path / ".taggui_thumbs"
+        thumbs_dir.mkdir(exist_ok=True, parents=True)
+
+        rel_path_str = str(img_path.relative_to(self._dataset_path))
+        path_hash = hashlib.md5(rel_path_str.encode("utf-8")).hexdigest()
+
+        return thumbs_dir / f"{path_hash}.jpg"
+
+    @Slot(str, result=str)
+    def getThumbnail(self, relative_path):
+        try:
+            img_path = self._dataset_path / relative_path
+            if not img_path.exists():
+                return ""
+
+            thumb_path = self._get_thumbnail_path(img_path)
+
+            if not thumb_path.exists() or img_path.stat().st_mtime > thumb_path.stat().st_mtime:
+                with Image.open(img_path) as img:
+                    img.thumbnail((300, 300))
+                    if img.mode in ("RGBA", "P"):
+                        img = img.convert("RGB")
+                    thumb_path.parent.mkdir(exist_ok=True, parents=True)
+                    img.save(thumb_path, "JPEG", quality=85)
+
+            return str(thumb_path.relative_to(self._dataset_path))
+        except Exception as e:
+            print(f"[Backend] Error generating thumbnail for {relative_path}: {e}")
+            return ""
+
+    @Slot()
+    def cleanupThumbnails(self):
+        """Scans .taggui_thumbs and deletes any orphaned thumbnail files no longer linked to dataset images."""
+        try:
+            thumbs_dir = self._dataset_path / ".taggui_thumbs"
+            if not thumbs_dir.exists():
+                return
+
+            valid_thumbs = set()
+            for img_file in self._dataset_path.rglob("*"):
+                if img_file.is_file() and img_file.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".bmp"):
+                    if ".taggui_thumbs" not in img_file.parts:
+                        valid_thumbs.add(self._get_thumbnail_path(img_file))
+
+            removed_count = 0
+            for thumb_file in thumbs_dir.glob("*.jpg"):
+                if thumb_file not in valid_thumbs:
+                    thumb_file.unlink()
+                    removed_count += 1
+
+            if removed_count > 0:
+                print(f"[Backend] Garbage collection finished. Removed {removed_count} orphaned thumbnail(s).")
+        except Exception as e:
+            print(f"[Backend] Thumbnail cleanup error: {e}")
+
+    @Slot(str, result=str)
+    def autoTagImage(self, relative_path):
+        try:
+            import torch
+            import timm
+            import csv
+            from PIL import Image
+            import numpy as np
+            from huggingface_hub import hf_hub_download
+
+            img_path = self._dataset_path / relative_path
+            if not img_path.exists():
+                return ""
+
+            # Load user thresholds from settings.json (defaults to 0.35 / 0.85)
+            general_threshold = 0.35
+            character_threshold = 0.85
+            settings_path = self._dataset_path / "settings.json"
+            if settings_path.exists():
+                try:
+                    s_data = json.loads(settings_path.read_text(encoding="utf-8"))
+                    general_threshold = float(s_data.get("general_threshold", 0.35))
+                    character_threshold = float(s_data.get("character_threshold", 0.85))
+                except Exception:
+                    pass
+
+            # Lazy-load model and tag list into memory if not already loaded
+            if not hasattr(self, "_tagger_model"):
+                print("[Backend] Loading local WD-EVA02-Large Tagger v3 model...")
+                model_name = "hf-hub:SmilingWolf/wd-eva02-large-tagger-v3"
+                self._tagger_model = timm.create_model(model_name, pretrained=True).eval()
+
+                self._tagger_device = "cuda" if torch.cuda.is_available() else "cpu"
+                self._tagger_model.to(self._tagger_device)
+
+                csv_path = hf_hub_download("SmilingWolf/wd-eva02-large-tagger-v3", "selected_tags.csv")
+
+                self._tagger_labels = []
+                self._tagger_categories = []
+                with open(csv_path, mode="r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        self._tagger_labels.append(row["name"])
+                        self._tagger_categories.append(int(row["category"]))
+
+                print("[Backend] Local tagger model loaded successfully!")
+
+            with Image.open(img_path) as img:
+                img = img.convert("RGB")
+                size = 448
+                target_size = (size, size)
+                img.thumbnail(target_size, Image.Resampling.LANCZOS)
+                new_img = Image.new("RGB", target_size, (255, 255, 255))
+                new_img.paste(img, ((size - img.width) // 2, (size - img.height) // 2))
+
+                img_array = np.array(new_img, dtype=np.float32) / 255.0
+                tensor = torch.from_numpy(img_array).permute(2, 0, 1).unsqueeze(0).to(self._tagger_device)
+
+            with torch.no_grad():
+                preds = torch.sigmoid(self._tagger_model(tensor)[0]).cpu().numpy()
+
+            extracted_tags = []
+            for idx, score in enumerate(preds):
+                if idx < len(self._tagger_labels):
+                    tag_name = self._tagger_labels[idx]
+                    category = self._tagger_categories[idx]
+
+                    if category == 4 and score >= character_threshold:
+                        extracted_tags.append(tag_name.replace("_", " "))
+                    elif category == 0 and score >= general_threshold:
+                        extracted_tags.append(tag_name.replace("_", " "))
+
+            tags_str = ", ".join(extracted_tags)
+
+            if tags_str:
+                txt_path = img_path.with_suffix(".txt")
+                txt_path.write_text(tags_str, encoding="utf-8")
+                print(
+                    f"[Backend] Locally auto-tagged {img_path.name} (Gen: {general_threshold}, Char: {character_threshold}): {tags_str}")
+                return tags_str
+            else:
+                print(f"[Backend] No tags crossed the threshold for {img_path.name}")
+                return ""
+
+        except Exception as e:
+            print(f"[Backend] Local auto-tagging failed: {e}")
+            return ""
+
+    @Slot(str)
+    def openExternalUrl(self, url_str):
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl(url_str))

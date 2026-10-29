@@ -162,12 +162,8 @@
       transition: opacity 0.15s, background-color 0.15s;
       z-index: 10;
     }
-    .image-card:hover .badge-delete {
-      opacity: 1;
-    }
-    .badge-delete:hover {
-      background: rgba(220, 38, 38, 1);
-    }
+    .image-card:hover .badge-delete { opacity: 1; }
+    .badge-delete:hover { background: rgba(220, 38, 38, 1); }
 
     .container-pad { padding: 12px; }
     .tags-container { padding: 12px; overflow-y: auto; flex: 1; min-height: 0; }
@@ -219,6 +215,26 @@
       border: 1px solid rgba(255, 255, 255, 0.08);
       margin-top: 12px;
     }
+
+    /* Modal Overlay Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background-color: #12141c;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      width: 380px;
+      padding: 20px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
   </style>
 </head>
 <body>
@@ -231,19 +247,17 @@
           TagGUI <span style="font-size: 9px; background: rgba(99,102,241,0.2); color: #818cf8; padding: 1px 5px; border-radius: 4px; font-family: monospace; border: 1px solid rgba(99,102,241,0.3);">NEXT</span>
         </h1>
         <div style="display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%;">
-          <!-- Fluid flex container with left-truncation (rtl) for deep subfolder paths -->
           <p id="dataset-path-label" title="Dataset Path" style="font-size: 10px; color: #94a3b8; font-family: monospace; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;">Loading...</p>
           <button onclick="browseFolder()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">Open Dataset</button>
+          <button onclick="openSettingsModal()" title="Configure Interrogator Settings" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⚙️ Settings</button>
+          <button onclick="backend && backend.openExternalUrl('https://github.com/ViTa-Plane/taggui-next')" title="View source on GitHub" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⭐ GitHub</button>
         </div>
       </div>
     </div>
 
-    <!-- Search Bar Wrapper with Flex Layout & Clear Button -->
     <div style="width: 100%; max-width: 350px; position: relative; display: flex; align-items: center; background-color: #181a24; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding-right: 8px; flex-shrink: 0;">
       <input id="filter-input" type="text" aria-label="Filter dataset" placeholder='Filter (name or tag, e.g. cat), Ctrl+F...' oninput="onFilterInputChanged()" style="flex: 1; background: transparent; border: none; padding: 6px 12px; color: #e2e8f0; font-size: 12px; font-family: monospace; outline: none;" />
-
       <button id="clear-filter-btn" onclick="clearFilter()" title="Clear filter" style="background: none; border: none; color: #64748b; font-size: 14px; font-weight: bold; cursor: pointer; display: none; padding: 0 6px; align-items: center; justify-content: center;">×</button>
-
       <div style="font-size: 10px; color: #94a3b8; background: #12141c; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); margin-left: 6px; pointer-events: none; white-space: nowrap;">
         <span id="image-count">0</span> / <span id="total-count">0</span>
       </div>
@@ -294,6 +308,7 @@
         <div>
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <span id="active-tag-count" style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase;">Tags (0)</span>
+            <button onclick="triggerAutoTag()" title="Generate tags using local PyTorch Tagger" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none; color: white; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 4px; cursor: pointer;">✨ AutoTag</button>
           </div>
           <div id="active-tags-container" class="tag-chips"></div>
         </div>
@@ -319,6 +334,39 @@
     </aside>
   </div>
 
+  <!-- Settings Modal Dialog -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="font-size: 13px; font-weight: bold; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Interrogator Settings</h2>
+        <button onclick="closeSettingsModal()" style="background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">×</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div>
+          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">General Threshold (0.0 - 1.0)</label>
+          <input id="setting-general-threshold" type="number" step="0.05" min="0" max="1" class="text-input" />
+        </div>
+        <div>
+          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Character Threshold (0.0 - 1.0)</label>
+          <input id="setting-character-threshold" type="number" step="0.05" min="0" max="1" class="text-input" />
+        </div>
+        <div>
+          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">AutoTag Mode</label>
+          <select id="setting-tag-strategy" class="text-input" style="background-color: #181a24; color: #e2e8f0; cursor: pointer;">
+            <option value="add">Add to existing tags</option>
+            <option value="replace">Replace existing tags (keep keywords)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+        <button onclick="closeSettingsModal()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 11px; padding: 6px 12px; border-radius: 6px; cursor: pointer;">Cancel</button>
+        <button onclick="saveSettingsModal()" style="background: #6366f1; border: none; color: white; font-size: 11px; font-weight: bold; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script>
     let backend = null;
@@ -330,12 +378,52 @@
     let keywordsInput = null;
     let selectedLeftTag = null;
 
-    // --- Undo / Redo History Stacks ---
     let undoStack = [];
     let redoStack = [];
     const MAX_HISTORY = 50;
 
-    // --- Tag Sanitization & Deduplication ---
+    let currentSettingsData = {
+        keywords: "",
+        general_threshold: 0.35,
+        character_threshold: 0.85,
+        tag_strategy: "add"
+    };
+
+    // --- Global Settings Modal Handlers ---
+    function openSettingsModal() {
+        if (backend) {
+            backend.getDatasetSettings(function(settingsRes) {
+                try {
+                    currentSettingsData = JSON.parse(settingsRes);
+                } catch(e) {}
+                document.getElementById('setting-general-threshold').value = currentSettingsData.general_threshold ?? 0.35;
+                document.getElementById('setting-character-threshold').value = currentSettingsData.character_threshold ?? 0.85;
+                document.getElementById('setting-tag-strategy').value = currentSettingsData.tag_strategy ?? "add";
+                document.getElementById('settings-modal').style.display = 'flex';
+            });
+        }
+    }
+
+    function closeSettingsModal() {
+        document.getElementById('settings-modal').style.display = 'none';
+    }
+
+    function saveSettingsModal() {
+        const genVal = parseFloat(document.getElementById('setting-general-threshold').value);
+        const charVal = parseFloat(document.getElementById('setting-character-threshold').value);
+        const stratVal = document.getElementById('setting-tag-strategy').value;
+
+        currentSettingsData.general_threshold = isNaN(genVal) ? 0.35 : genVal;
+        currentSettingsData.character_threshold = isNaN(charVal) ? 0.85 : charVal;
+        currentSettingsData.tag_strategy = stratVal;
+        if (keywordsInput) currentSettingsData.keywords = keywordsInput.value;
+
+        if (backend) {
+            backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
+        }
+        closeSettingsModal();
+    }
+
     function cleanImageTags(tags) {
         if (!Array.isArray(tags)) return [];
         const seen = new Set();
@@ -343,9 +431,7 @@
             const trimmed = tag.trim();
             const lower = trimmed.toLowerCase();
             if (!lower) return false;
-            if (seen.has(lower)) {
-                return false;
-            }
+            if (seen.has(lower)) return false;
             seen.add(lower);
             return true;
         });
@@ -355,7 +441,6 @@
         const trimmed = tag.trim();
         if (!trimmed) return false;
         const lower = trimmed.toLowerCase();
-
         const exists = img.tags.some(t => t.trim().toLowerCase() === lower);
         if (!exists) {
             img.tags.push(trimmed);
@@ -381,9 +466,10 @@
 
             backend.getDatasetSettings(function(settingsRes) {
                 try {
-                    const settings = JSON.parse(settingsRes);
-                    if (keywordsInput) keywordsInput.value = settings.keywords || "";
+                    currentSettingsData = JSON.parse(settingsRes);
+                    if (keywordsInput) keywordsInput.value = currentSettingsData.keywords || "";
                 } catch(e) {
+                    currentSettingsData = { keywords: "", general_threshold: 0.35, character_threshold: 0.85, tag_strategy: "add" };
                     if (keywordsInput) keywordsInput.value = "";
                 }
                 updateDatasetUI();
@@ -402,9 +488,10 @@
 
             backend.getDatasetSettings(function(settingsRes) {
                 try {
-                    const settings = JSON.parse(settingsRes);
-                    if (keywordsInput) keywordsInput.value = settings.keywords || "";
+                    currentSettingsData = JSON.parse(settingsRes);
+                    if (keywordsInput) keywordsInput.value = currentSettingsData.keywords || "";
                 } catch(e) {
+                    currentSettingsData = { keywords: "", general_threshold: 0.35, character_threshold: 0.85, tag_strategy: "add" };
                     if (keywordsInput) keywordsInput.value = "";
                 }
                 updateDatasetUI();
@@ -422,17 +509,12 @@
             selectedImageIndex: selectedImageIndex
         };
         undoStack.push(snapshot);
-        if (undoStack.length > MAX_HISTORY) {
-            undoStack.shift();
-        }
-        // Clear redo stack on any new user action
+        if (undoStack.length > MAX_HISTORY) undoStack.shift();
         redoStack = [];
     }
 
     function performUndo() {
         if (undoStack.length === 0) return;
-
-        // Save current state to redo stack before moving backward
         const currentState = {
             images: datasetImages.map(img => ({
                 relative_path: img.relative_path,
@@ -442,15 +524,11 @@
             selectedImageIndex: selectedImageIndex
         };
         redoStack.push(currentState);
-
-        const previousState = undoStack.pop();
-        applyState(previousState);
+        applyState(undoStack.pop());
     }
 
     function performRedo() {
         if (redoStack.length === 0) return;
-
-        // Save current state to undo stack before moving forward
         const currentState = {
             images: datasetImages.map(img => ({
                 relative_path: img.relative_path,
@@ -460,9 +538,7 @@
             selectedImageIndex: selectedImageIndex
         };
         undoStack.push(currentState);
-
-        const nextState = redoStack.pop();
-        applyState(nextState);
+        applyState(redoStack.pop());
     }
 
     function applyState(targetState) {
@@ -474,52 +550,27 @@
 
         const currentPaths = new Set(datasetImages.map(img => img.relative_path));
         const missingPaths = targetState.images.filter(prevImg => !currentPaths.has(prevImg.relative_path));
-        const isImageDeletionChange = missingPaths.length > 0;
 
-        if (isImageDeletionChange) {
+        if (missingPaths.length > 0) {
             missingPaths.forEach(prevImg => {
-                if (backend) {
-                    backend.restoreImageAndTags(prevImg.relative_path);
-                }
+                if (backend) backend.restoreImageAndTags(prevImg.relative_path);
             });
-
             targetState.images.forEach(prevImg => {
                 batchUpdates[prevImg.relative_path] = prevImg.tags.join(', ');
             });
-
             if (keywordsInput) keywordsInput.value = targetState.keywords;
             if (backend) {
                 backend.saveBatchImageTags(JSON.stringify(batchUpdates));
-                if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
+                if (keywordsInput) {
+                    currentSettingsData.keywords = keywordsInput.value;
+                    backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
+                }
             }
-
-            if (backend) {
-                backend.getDatasetImages(function(response) {
-                    datasetImages = JSON.parse(response);
-                    datasetImages.forEach(img => {
-                        img.tags = cleanImageTags(img.tags);
-                    });
-                    applyFilter();
-
-                    let targetIndex = -1;
-                    if (currentSelectedPath) {
-                        targetIndex = datasetImages.findIndex(img => img.relative_path === currentSelectedPath);
-                    }
-                    if (targetIndex === -1 && targetState.selectedImageIndex !== null) {
-                        targetIndex = Math.min(targetState.selectedImageIndex, datasetImages.length - 1);
-                    }
-
-                    if (targetIndex !== -1 && targetIndex < datasetImages.length) {
-                        selectImage(targetIndex, true);
-                        const gridEl = document.getElementById('image-grid');
-                        const filteredIdx = filteredImages.indexOf(datasetImages[targetIndex]);
-                        const cardNode = gridEl.children[filteredIdx];
-                        if (cardNode) {
-                            cardNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }
-                    }
-                });
-            }
+            backend.getDatasetImages(function(response) {
+                datasetImages = JSON.parse(response);
+                datasetImages.forEach(img => img.tags = cleanImageTags(img.tags));
+                applyFilter();
+            });
         } else {
             targetState.images.forEach(prevImg => {
                 const img = datasetImages.find(i => i.relative_path === prevImg.relative_path);
@@ -528,37 +579,16 @@
                     batchUpdates[prevImg.relative_path] = img.tags.join(', ');
                 }
             });
-
             if (keywordsInput) keywordsInput.value = targetState.keywords;
             if (backend) {
                 backend.saveBatchImageTags(JSON.stringify(batchUpdates));
-                if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
+                if (keywordsInput) {
+                    currentSettingsData.keywords = keywordsInput.value;
+                    backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
+                }
             }
-
             applyFilter();
-
-            let targetIndex = -1;
-            if (currentSelectedPath) {
-                targetIndex = datasetImages.findIndex(img => img.relative_path === currentSelectedPath);
-            }
-            if (targetIndex === -1 && targetState.selectedImageIndex !== null) {
-                targetIndex = Math.min(targetState.selectedImageIndex, datasetImages.length - 1);
-            }
-
-            if (targetIndex !== -1 && targetIndex < datasetImages.length) {
-                selectImage(targetIndex, true);
-            }
         }
-    }
-
-    // Helper hash function used for matching thumb generation naming convention
-    function absHash(str) {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            hash = ((hash << 5) - hash) + str.charCodeAt(i);
-            hash |= 0;
-        }
-        return Math.abs(hash);
     }
 
     new QWebChannel(qt.webChannelTransport, function(channel) {
@@ -570,7 +600,8 @@
                 renderActiveTags();
                 renderGlobalTagsList();
                 if (backend) {
-                    backend.saveDatasetSettings(this.value);
+                    currentSettingsData.keywords = this.value;
+                    backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
                 }
             });
 
@@ -583,7 +614,6 @@
                 }
             });
         }
-
         fetchDataset();
     });
 
@@ -593,13 +623,8 @@
 
         let rawPath = "";
         if (backend) {
-            if (typeof backend.dataset_path_str === 'string') {
-                rawPath = backend.dataset_path_str;
-            } else if (typeof backend.dataset_path === 'string') {
-                rawPath = backend.dataset_path;
-            } else if (backend.dataset_path && typeof backend.dataset_path.toString === 'function') {
-                rawPath = backend.dataset_path.toString();
-            }
+            if (typeof backend.dataset_path_str === 'string') rawPath = backend.dataset_path_str;
+            else if (typeof backend.dataset_path === 'string') rawPath = backend.dataset_path;
         }
 
         const pathLabelEl = document.getElementById('dataset-path-label');
@@ -607,90 +632,63 @@
             pathLabelEl.style.cursor = 'pointer';
             pathLabelEl.title = "Double-click to open folder in system explorer";
             pathLabelEl.ondblclick = () => {
-                if (backend && typeof backend.openDatasetInExplorer === 'function') {
-                    backend.openDatasetInExplorer();
-                }
+                if (backend && typeof backend.openDatasetInExplorer === 'function') backend.openDatasetInExplorer();
             };
         }
 
         if (rawPath) {
             const normalized = rawPath.replace(/\\/g, '/');
             const parts = normalized.split('/').filter(p => p.length > 0);
-            
-            if (parts.length > 0) {
-                const hasDrive = parts[0].includes(':');
-                const joinedPath = parts.join('\\');
-                pathLabelEl.innerText = hasDrive ? joinedPath : `\\${joinedPath}\\`;
-            } else {
-                pathLabelEl.innerText = "\\";
-            }
+            pathLabelEl.innerText = parts.length > 0 ? parts.join('\\') : "\\";
             pathLabelEl.title = rawPath;
         } else {
             pathLabelEl.innerText = "No Dataset Loaded";
-            pathLabelEl.title = "";
         }
 
         renderGlobalTagsList();
         renderGrid();
         if (filteredImages.length > 0 && selectedImageIndex === null) {
-            const firstOriginalIdx = datasetImages.indexOf(filteredImages[0]);
-            selectImage(firstOriginalIdx, true);
+            selectImage(datasetImages.indexOf(filteredImages[0]), true);
         }
     }
 
     function onFilterInputChanged() {
         const input = document.getElementById('filter-input');
         const clearBtn = document.getElementById('clear-filter-btn');
-
-        if (clearBtn) {
-            clearBtn.style.display = input.value.trim().length > 0 ? 'flex' : 'none';
-        }
-
+        if (clearBtn) clearBtn.style.display = input.value.trim().length > 0 ? 'flex' : 'none';
         applyFilter();
     }
 
     function clearFilter() {
         const input = document.getElementById('filter-input');
-        const clearBtn = document.getElementById('clear-filter-btn');
-
         input.value = '';
-        if (clearBtn) {
-            clearBtn.style.display = 'none';
-        }
-
+        document.getElementById('clear-filter-btn').style.display = 'none';
         applyFilter();
         input.focus();
     }
 
     function applyFilter() {
         const query = document.getElementById('filter-input').value.trim().toLowerCase();
-
-        if (!query) {
-            filteredImages = [...datasetImages];
-        } else if (query === 'untagged') {
-            filteredImages = datasetImages.filter(img => img.tags.length === 0);
-        } else {
+        if (!query) filteredImages = [...datasetImages];
+        else if (query === 'untagged') filteredImages = datasetImages.filter(img => img.tags.length === 0);
+        else {
             filteredImages = datasetImages.filter(img =>
                 img.filename.toLowerCase().includes(query) ||
                 img.tags.some(t => t.toLowerCase().includes(query))
             );
         }
-
         document.getElementById('image-count').innerText = filteredImages.length;
         document.getElementById('image-grid').innerHTML = '';
         renderGlobalTagsList();
-
         multiSelectedIndices.clear();
         if (filteredImages.length > 0) {
-            const firstOriginalIdx = datasetImages.indexOf(filteredImages[0]);
-            selectImage(firstOriginalIdx, true);
+            selectImage(datasetImages.indexOf(filteredImages[0]), true);
         } else {
             selectedImageIndex = null;
             document.getElementById('selected-filename').innerText = "No image found";
             document.getElementById('active-tags-container').innerHTML = '';
             document.getElementById('active-tag-count').innerText = "Tags (0)";
         }
-
         renderGrid();
     }
 
@@ -698,7 +696,7 @@
         const grid = document.getElementById('image-grid');
         grid.innerHTML = '';
 
-        filteredImages.forEach((img, filteredIdx) => {
+        filteredImages.forEach((img) => {
             const originalIdx = datasetImages.indexOf(img);
             const isSelected = selectedImageIndex === originalIdx;
             const isMultiSelected = multiSelectedIndices.has(originalIdx);
@@ -719,15 +717,10 @@
                 if (e.shiftKey && lastClickedIndex !== null) {
                     const start = Math.min(lastClickedIndex, originalIdx);
                     const end = Math.max(lastClickedIndex, originalIdx);
-                    for (let i = start; i <= end; i++) {
-                        multiSelectedIndices.add(i);
-                    }
+                    for (let i = start; i <= end; i++) multiSelectedIndices.add(i);
                 } else if (e.ctrlKey || e.metaKey) {
-                    if (multiSelectedIndices.has(originalIdx)) {
-                        multiSelectedIndices.delete(originalIdx);
-                    } else {
-                        multiSelectedIndices.add(originalIdx);
-                    }
+                    if (multiSelectedIndices.has(originalIdx)) multiSelectedIndices.delete(originalIdx);
+                    else multiSelectedIndices.add(originalIdx);
                 } else {
                     multiSelectedIndices.clear();
                     selectImage(originalIdx, true);
@@ -735,7 +728,6 @@
                 lastClickedIndex = originalIdx;
                 updateGridSelectionUI();
             };
-
             grid.appendChild(card);
         });
         updateSelectionStatusText();
@@ -744,38 +736,11 @@
     function promptDeleteImage(event, originalIdx) {
         event.stopPropagation();
         const img = datasetImages[originalIdx];
-        if (!img) return;
-
-        if (!confirm(`Are you sure you want to delete "${img.filename}" and its .txt tags file? It will be moved to your system recycle bin.`)) {
-            return;
-        }
+        if (!img || !confirm(`Delete "${img.filename}" and its .txt tags file?`)) return;
 
         pushUndoState();
-
-        if (backend) {
-            backend.deleteImageAndTags(img.relative_path, (success) => {
-                if (!success) {
-                    alert("Failed to delete image on backend.");
-                    return;
-                }
-            });
-        }
-
+        if (backend) backend.deleteImageAndTags(img.relative_path);
         datasetImages.splice(originalIdx, 1);
-        
-        multiSelectedIndices.delete(originalIdx);
-        const newMulti = new Set();
-        multiSelectedIndices.forEach(idx => {
-            newMulti.add(idx > originalIdx ? idx - 1 : idx);
-        });
-        multiSelectedIndices = newMulti;
-
-        if (selectedImageIndex === originalIdx) {
-            selectedImageIndex = datasetImages.length > 0 ? Math.min(originalIdx, datasetImages.length - 1) : null;
-        } else if (selectedImageIndex > originalIdx) {
-            selectedImageIndex--;
-        }
-
         applyFilter();
     }
 
@@ -783,7 +748,6 @@
         selectedImageIndex = idx;
         const img = datasetImages[idx];
         if (!img) return;
-
         document.getElementById('selected-filename').innerText = img.filename;
         renderActiveTags();
         if (updateUI) updateGridSelectionUI();
@@ -800,24 +764,8 @@
     }
 
     function updateSelectionStatusText() {
-        const totalCount = filteredImages.length;
         const selectedCount = selectedImageIndex !== null ? 1 + multiSelectedIndices.size : 0;
-
-        const counterEl = document.getElementById('selection-counter');
-        if (counterEl) {
-            counterEl.innerText = `${selectedCount} / ${totalCount} selected`;
-        }
-
-        const statusEl = document.getElementById('selection-status');
-        if (statusEl) {
-            if (selectedCount > 1) {
-                statusEl.innerText = `Batch Mode Active (${selectedCount} images targeted)`;
-                statusEl.style.color = '#38bdf8';
-            } else {
-                statusEl.innerText = 'Grid View (Arrow keys to navigate, Shift+Click for multi-select)';
-                statusEl.style.color = '#94a3b8';
-            }
-        }
+        document.getElementById('selection-counter').innerText = `${selectedCount} / ${filteredImages.length} selected`;
     }
 
     function clearMultiSelection() {
@@ -828,12 +776,9 @@
     function selectAllFiltered() {
         if (filteredImages.length === 0) return;
         multiSelectedIndices.clear();
-        const firstOriginalIdx = datasetImages.indexOf(filteredImages[0]);
-        selectedImageIndex = firstOriginalIdx;
-
+        selectedImageIndex = datasetImages.indexOf(filteredImages[0]);
         for (let i = 1; i < filteredImages.length; i++) {
-            const originalIdx = datasetImages.indexOf(filteredImages[i]);
-            multiSelectedIndices.add(originalIdx);
+            multiSelectedIndices.add(datasetImages.indexOf(filteredImages[i]));
         }
         selectImage(selectedImageIndex, false);
         updateGridSelectionUI();
@@ -842,7 +787,6 @@
     function deleteTagGlobally(tagToDelete) {
         if (!tagToDelete) return;
         pushUndoState();
-
         const updates = {};
         datasetImages.forEach(img => {
             const initialLen = img.tags.length;
@@ -851,11 +795,9 @@
                 updates[img.relative_path] = img.tags.join(', ');
             }
         });
-
         if (backend && Object.keys(updates).length > 0) {
             backend.saveBatchImageTags(JSON.stringify(updates));
         }
-
         selectedLeftTag = null;
         renderGlobalTagsList();
         renderActiveTags();
@@ -871,12 +813,7 @@
         const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
 
         const tagCounts = {};
-        datasetImages.forEach(img => {
-            img.tags.forEach(tag => {
-                tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-            });
-        });
-
+        datasetImages.forEach(img => img.tags.forEach(t => tagCounts[t] = (tagCounts[t] || 0) + 1));
         const sortedTags = Object.entries(tagCounts).sort((a,b) => b[1] - a[1]);
         let firstMatchNode = null;
 
@@ -901,17 +838,15 @@
             `;
             item.innerHTML = `<span>${tag}</span> <span style="color: #64748b;">${count}</span>`;
 
-            // --- Double-Click to Rename Globally ---
+            // Double-Click to Rename Globally
             item.ondblclick = (e) => {
                 e.stopPropagation();
                 const newTagVal = prompt(`Rename tag "${tag}" globally across all images:`, tag);
-                if (newTagVal === null) return; // Cancelled
-
+                if (newTagVal === null) return;
                 const trimmedNew = newTagVal.trim().toLowerCase();
                 if (!trimmedNew || trimmedNew === tag.toLowerCase()) return;
 
                 pushUndoState();
-
                 const updates = {};
                 datasetImages.forEach(img => {
                     let changed = false;
@@ -931,7 +866,6 @@
                 if (backend && Object.keys(updates).length > 0) {
                     backend.saveBatchImageTags(JSON.stringify(updates));
                 }
-
                 selectedLeftTag = trimmedNew;
                 renderGlobalTagsList();
                 renderActiveTags();
@@ -954,9 +888,7 @@
                         img.tags = img.tags.filter(t => t.toLowerCase() !== tag.toLowerCase());
                         updates[img.relative_path] = img.tags.join(', ');
                     });
-                    if (backend && targets.length > 0) {
-                        backend.saveBatchImageTags(JSON.stringify(updates));
-                    }
+                    if (backend && targets.length > 0) backend.saveBatchImageTags(JSON.stringify(updates));
                     renderActiveTags();
                     renderGlobalTagsList();
                     renderGrid();
@@ -970,31 +902,23 @@
                         addTagToImage(img, tag);
                         updates[img.relative_path] = img.tags.join(', ');
                     });
-                    if (backend && targets.length > 0) {
-                        backend.saveBatchImageTags(JSON.stringify(updates));
-                    }
+                    if (backend && targets.length > 0) backend.saveBatchImageTags(JSON.stringify(updates));
                     renderActiveTags();
                     renderGlobalTagsList();
                     renderGrid();
                     e.stopPropagation();
                 } else {
                     selectedLeftTag = tag;
-                    const filterInput = document.getElementById('filter-input');
-                    filterInput.value = tag;
+                    document.getElementById('filter-input').value = tag;
                     onFilterInputChanged();
                     renderGlobalTagsList();
                 }
             };
 
             container.appendChild(item);
-
-            // Track the first matching tag element
-            if (isHighlighted && !firstMatchNode) {
-                firstMatchNode = item;
-            }
+            if (isHighlighted && !firstMatchNode) firstMatchNode = item;
         });
 
-        // Smoothly scroll the left panel to the first matched tag if a filter is active
         if (firstMatchNode) {
             firstMatchNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
@@ -1015,15 +939,7 @@
         if (!dropIndicator) {
             dropIndicator = document.createElement('div');
             dropIndicator.id = 'tag-drop-indicator';
-            dropIndicator.style.cssText = `
-                width: 3px;
-                background-color: #38bdf8;
-                box-shadow: 0 0 8px #38bdf8;
-                border-radius: 2px;
-                margin: 0 2px;
-                pointer-events: none;
-                display: none;
-            `;
+            dropIndicator.style.cssText = `width: 3px; background-color: #38bdf8; box-shadow: 0 0 8px #38bdf8; border-radius: 2px; margin: 0 2px; pointer-events: none; display: none;`;
         }
 
         let targetDropIdx = null;
@@ -1031,7 +947,6 @@
         container.ondragover = (e) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
-
             const chips = Array.from(container.querySelectorAll('.tag-chip'));
             if (chips.length === 0) return;
 
@@ -1043,7 +958,6 @@
                 const rect = chip.getBoundingClientRect();
                 const midX = rect.left + rect.width / 2;
                 const midY = rect.top + rect.height / 2;
-
                 const dist = Math.hypot(e.clientX - midX, e.clientY - midY);
                 if (dist < closestDistance) {
                     closestDistance = dist;
@@ -1055,7 +969,6 @@
             if (closestChip) {
                 dropIndicator.style.display = 'inline-block';
                 dropIndicator.style.height = `${closestChip.offsetHeight || 22}px`;
-
                 const idx = parseInt(closestChip.dataset.index);
                 if (insertBefore) {
                     container.insertBefore(dropIndicator, closestChip);
@@ -1071,32 +984,21 @@
             e.preventDefault();
             const fromIdxStr = e.dataTransfer.getData('text/plain');
             if (!fromIdxStr && fromIdxStr !== "0") return;
-
             const fromIdx = parseInt(fromIdxStr);
             let toIdx = targetDropIdx;
 
-            if (dropIndicator.parentNode) {
-                dropIndicator.parentNode.removeChild(dropIndicator);
-            }
+            if (dropIndicator.parentNode) dropIndicator.parentNode.removeChild(dropIndicator);
             dropIndicator.style.display = 'none';
 
             if (toIdx === null || isNaN(fromIdx)) return;
-
-            if (fromIdx < toIdx) {
-                toIdx--;
-            }
-
+            if (fromIdx < toIdx) toIdx--;
             if (fromIdx === toIdx) return;
 
             pushUndoState();
-
             const movedTag = img.tags.splice(fromIdx, 1)[0];
             img.tags.splice(toIdx, 0, movedTag);
 
-            if (backend) {
-                backend.saveImageTags(img.relative_path, img.tags.join(', '));
-            }
-
+            if (backend) backend.saveImageTags(img.relative_path, img.tags.join(', '));
             renderActiveTags();
             renderGlobalTagsList();
             renderGrid();
@@ -1110,7 +1012,7 @@
             chip.className = 'tag-chip';
             chip.draggable = true;
             chip.dataset.index = tagIdx;
-            chip.title = "Drag to reorder | Ctrl+Click: Add to Keywords | Ctrl+Alt+Click: Remove from Keywords";
+            chip.title = "Drag to reorder | Ctrl+Click: Add to Keywords";
 
             if (isKeyword) {
                 chip.style.borderColor = '#10b981';
@@ -1122,33 +1024,24 @@
                 chip.style.color = '#ffffff';
             }
 
-            chip.innerHTML = `${tag} <span title="Remove tag from image">×</span>`;
+            chip.innerHTML = `${tag} <span title="Remove tag">×</span>`;
 
-            // --- Double-Click to Edit Tag ---
             chip.addEventListener('dblclick', (e) => {
                 e.stopPropagation();
                 const newTagVal = prompt("Edit tag:", tag);
-                if (newTagVal === null) return; // User cancelled
-
+                if (newTagVal === null) return;
                 const trimmedNew = newTagVal.trim().toLowerCase();
                 if (!trimmedNew || trimmedNew === tag.toLowerCase()) return;
 
                 pushUndoState();
-
-                // Update tag at specific index and clean/deduplicate
                 img.tags[tagIdx] = trimmedNew;
                 img.tags = cleanImageTags(img.tags);
-
-                if (backend) {
-                    backend.saveImageTags(img.relative_path, img.tags.join(', '));
-                }
-
+                if (backend) backend.saveImageTags(img.relative_path, img.tags.join(', '));
                 renderActiveTags();
                 renderGlobalTagsList();
                 renderGrid();
             });
 
-            // --- Drag Handlers ---
             chip.addEventListener('dragstart', (e) => {
                 e.dataTransfer.setData('text/plain', tagIdx.toString());
                 e.dataTransfer.effectAllowed = 'move';
@@ -1157,25 +1050,24 @@
 
             chip.addEventListener('dragend', () => {
                 chip.style.opacity = '1';
-                if (dropIndicator.parentNode) {
-                    dropIndicator.parentNode.removeChild(dropIndicator);
-                }
+                if (dropIndicator.parentNode) dropIndicator.parentNode.removeChild(dropIndicator);
                 dropIndicator.style.display = 'none';
             });
 
             chip.onclick = (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.altKey) {
-                    removeFromKeywords(tag);
-                    e.stopPropagation();
-                } else if (e.ctrlKey || e.metaKey) {
-                    addToKeywords(tag);
-                    e.stopPropagation();
-                }
+                if ((e.ctrlKey || e.metaKey) && e.altKey) removeFromKeywords(tag);
+                else if (e.ctrlKey || e.metaKey) addToKeywords(tag);
+                e.stopPropagation();
             };
 
             chip.querySelector('span').onclick = (e) => {
                 e.stopPropagation();
-                removeTagFromSelection(tag);
+                pushUndoState();
+                img.tags = img.tags.filter(t => t !== tag);
+                if (backend) backend.saveImageTags(img.relative_path, img.tags.join(', '));
+                renderActiveTags();
+                renderGlobalTagsList();
+                renderGrid();
             };
 
             container.appendChild(chip);
@@ -1190,46 +1082,25 @@
         if (!img || img.tags.length <= 1) return;
 
         pushUndoState();
-
         const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
         const keywordTags = [];
         const standardTags = [];
 
         img.tags.forEach(tag => {
-            if (activeKeywords.includes(tag.toLowerCase())) {
-                keywordTags.push(tag);
-            } else {
-                standardTags.push(tag);
-            }
+            if (activeKeywords.includes(tag.toLowerCase())) keywordTags.push(tag);
+            else standardTags.push(tag);
         });
 
         if (method === 'alpha') {
             standardTags.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'accent' }));
         } else if (method === 'freq') {
             const globalCounts = {};
-            datasetImages.forEach(dImg => {
-                dImg.tags.forEach(t => {
-                    const lowerT = t.toLowerCase();
-                    globalCounts[lowerT] = (globalCounts[lowerT] || 0) + 1;
-                });
-            });
-
-            standardTags.sort((a, b) => {
-                const countA = globalCounts[a.toLowerCase()] || 0;
-                const countB = globalCounts[b.toLowerCase()] || 0;
-                if (countB !== countA) {
-                    return countB - countA;
-                }
-                return a.localeCompare(b);
-            });
+            datasetImages.forEach(dImg => dImg.tags.forEach(t => globalCounts[t.toLowerCase()] = (globalCounts[t.toLowerCase()] || 0) + 1));
+            standardTags.sort((a, b) => (globalCounts[b.toLowerCase()] || 0) - (globalCounts[a.toLowerCase()] || 0) || a.localeCompare(b));
         }
 
         img.tags = [...keywordTags, ...standardTags];
-
-        if (backend) {
-            backend.saveImageTags(img.relative_path, img.tags.join(', '));
-        }
-
+        if (backend) backend.saveImageTags(img.relative_path, img.tags.join(', '));
         renderActiveTags();
         renderGlobalTagsList();
         renderGrid();
@@ -1238,40 +1109,14 @@
     function addTagToSelection(newTag) {
         if (!newTag || selectedImageIndex === null) return;
         pushUndoState();
-
         const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
         const updates = {};
-
         targets.forEach(idx => {
             const img = datasetImages[idx];
             addTagToImage(img, newTag);
             updates[img.relative_path] = img.tags.join(', ');
         });
-
-        if (backend) {
-            backend.saveBatchImageTags(JSON.stringify(updates));
-        }
-        renderActiveTags();
-        renderGlobalTagsList();
-        renderGrid();
-    }
-
-    function removeTagFromSelection(tagToRemove) {
-        if (selectedImageIndex === null) return;
-        pushUndoState();
-
-        const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
-        const updates = {};
-
-        targets.forEach(idx => {
-            const img = datasetImages[idx];
-            img.tags = img.tags.filter(t => t !== tagToRemove);
-            updates[img.relative_path] = img.tags.join(', ');
-        });
-
-        if (backend) {
-            backend.saveBatchImageTags(JSON.stringify(updates));
-        }
+        if (backend) backend.saveBatchImageTags(JSON.stringify(updates));
         renderActiveTags();
         renderGlobalTagsList();
         renderGrid();
@@ -1282,15 +1127,14 @@
         pushUndoState();
         const currentVal = keywordsInput.value.trim();
         let keywordsList = currentVal ? currentVal.split(',').map(k => k.trim()).filter(k => k.length > 0) : [];
-
-        const lowerTag = tag.toLowerCase();
-        if (!keywordsList.map(k => k.toLowerCase()).includes(lowerTag)) {
+        if (!keywordsList.map(k => k.toLowerCase()).includes(tag.toLowerCase())) {
             keywordsList.push(tag);
             keywordsInput.value = keywordsList.join(', ');
             renderActiveTags();
             renderGlobalTagsList();
             if (backend) {
-                backend.saveDatasetSettings(keywordsInput.value);
+                currentSettingsData.keywords = keywordsInput.value;
+                backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
             }
         }
     }
@@ -1300,17 +1144,15 @@
         const currentVal = keywordsInput.value.trim();
         if (!currentVal) return;
         pushUndoState();
-
         let keywordsList = currentVal.split(',').map(k => k.trim()).filter(k => k.length > 0);
-        const lowerTag = tag.toLowerCase();
-        const updatedList = keywordsList.filter(k => k.toLowerCase() !== lowerTag);
-
+        const updatedList = keywordsList.filter(k => k.toLowerCase() !== tag.toLowerCase());
         if (updatedList.length !== keywordsList.length) {
             keywordsInput.value = updatedList.join(', ');
             renderActiveTags();
             renderGlobalTagsList();
             if (backend) {
-                backend.saveDatasetSettings(keywordsInput.value);
+                currentSettingsData.keywords = keywordsInput.value;
+                backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
             }
         }
     }
@@ -1329,9 +1171,7 @@
     function applyKeywordsToSelectionBtn() {
         if (!keywordsInput) return;
         const val = keywordsInput.value.trim();
-        if (val && selectedImageIndex !== null) {
-            applyKeywordsToSelection(val);
-        }
+        if (val && selectedImageIndex !== null) applyKeywordsToSelection(val);
     }
 
     function applyKeywordsToSelection(keywordsStr) {
@@ -1342,18 +1182,13 @@
         pushUndoState();
         const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
         const updates = {};
-
         targets.forEach(idx => {
             const img = datasetImages[idx];
-            const currentTags = [...img.tags];
-            const remainingTags = currentTags.filter(t => !rawKeywords.includes(t.toLowerCase()));
+            const remainingTags = img.tags.filter(t => !rawKeywords.includes(t.toLowerCase()));
             img.tags = [...rawKeywords, ...remainingTags];
             updates[img.relative_path] = img.tags.join(', ');
         });
-
-        if (backend) {
-            backend.saveBatchImageTags(JSON.stringify(updates));
-        }
+        if (backend) backend.saveBatchImageTags(JSON.stringify(updates));
         renderActiveTags();
         renderGlobalTagsList();
         renderGrid();
@@ -1367,24 +1202,64 @@
 
         pushUndoState();
         const updates = {};
-
         datasetImages.forEach(img => {
-            const currentTags = [...img.tags];
-            const remainingTags = currentTags.filter(t => !rawKeywords.includes(t.toLowerCase()));
+            const remainingTags = img.tags.filter(t => !rawKeywords.includes(t.toLowerCase()));
             img.tags = [...rawKeywords, ...remainingTags];
             updates[img.relative_path] = img.tags.join(', ');
         });
-
-        if (backend) {
-            backend.saveBatchImageTags(JSON.stringify(updates));
-        }
-
+        if (backend) backend.saveBatchImageTags(JSON.stringify(updates));
         renderActiveTags();
         renderGlobalTagsList();
         renderGrid();
     }
 
-    // --- Autocomplete & Tag Input Logic ---
+    function triggerAutoTag() {
+        if (selectedImageIndex === null) {
+            alert("Please select an image first.");
+            return;
+        }
+
+        const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
+        if (!confirm(`Run Local PyTorch AutoTag for ${targets.length} selected image(s)?`)) return;
+
+        pushUndoState();
+        let completed = 0;
+        const batchUpdates = {};
+        const strategy = currentSettingsData.tag_strategy || "add";
+
+        targets.forEach((idx) => {
+            const img = datasetImages[idx];
+            if (!img) return;
+
+            if (backend && typeof backend.autoTagImage === 'function') {
+                backend.autoTagImage(img.relative_path, (returnedTagsStr) => {
+                    if (returnedTagsStr) {
+                        const newTags = returnedTagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
+                        const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
+
+                        if (strategy === "replace") {
+                            img.tags = cleanImageTags([...activeKeywords, ...newTags]);
+                        } else {
+                            const remainingExisting = img.tags.filter(t => !activeKeywords.includes(t.toLowerCase()));
+                            img.tags = cleanImageTags([...activeKeywords, ...newTags, ...remainingExisting]);
+                        }
+                        batchUpdates[img.relative_path] = img.tags.join(', ');
+                    }
+
+                    completed++;
+                    if (completed === targets.length) {
+                        if (backend && Object.keys(batchUpdates).length > 0) {
+                            backend.saveBatchImageTags(JSON.stringify(batchUpdates));
+                        }
+                        renderActiveTags();
+                        renderGlobalTagsList();
+                        renderGrid();
+                    }
+                });
+            }
+        });
+    }
+
     const tagInput = document.getElementById('tag-input');
     const autoBox = document.getElementById('autocomplete-box');
 
@@ -1395,16 +1270,13 @@
                 autoBox.style.display = 'none';
                 return;
             }
-
             const allTags = new Set();
             datasetImages.forEach(img => img.tags.forEach(t => allTags.add(t)));
-
             const matches = Array.from(allTags).filter(t => t.includes(val) && t !== val).slice(0, 6);
             if (matches.length === 0) {
                 autoBox.style.display = 'none';
                 return;
             }
-
             autoBox.innerHTML = '';
             matches.forEach(match => {
                 const div = document.createElement('div');
@@ -1434,47 +1306,29 @@
         });
     }
 
-    // --- Global Keyboard Shortcuts ---
     document.addEventListener('keydown', function(e) {
         const activeInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input') || document.activeElement === keywordsInput;
 
-        // Ctrl+Shift+Z or Ctrl+Y for Redo
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             performRedo();
             return;
         }
-
-        // Ctrl+Z for Undo
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             performUndo();
             return;
         }
-
         if ((e.key === 'Delete' || e.key === 'Backspace') && !activeInput && selectedLeftTag) {
             e.preventDefault();
             deleteTagGlobally(selectedLeftTag);
             return;
         }
-
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !activeInput) {
             e.preventDefault();
             selectAllFiltered();
             return;
         }
-
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
-            e.preventDefault();
-            clearMultiSelection();
-            selectedImageIndex = null;
-            document.getElementById('selected-filename').innerText = "No image selected";
-            document.getElementById('active-tags-container').innerHTML = '';
-            document.getElementById('active-tag-count').innerText = "Tags (0)";
-            updateGridSelectionUI();
-            return;
-        }
-
         if (e.key === 'Escape') {
             document.activeElement.blur();
             selectedLeftTag = null;
@@ -1484,43 +1338,30 @@
             return;
         }
 
-        if (activeInput) return;
-        if (filteredImages.length === 0) return;
+        if (activeInput || filteredImages.length === 0) return;
 
         let currentFilteredIdx = filteredImages.findIndex(img => datasetImages.indexOf(img) === selectedImageIndex);
         if (currentFilteredIdx === -1) currentFilteredIdx = 0;
 
         const gridEl = document.getElementById('image-grid');
-        const cardWidth = 200 + 16;
-        const cols = Math.max(1, Math.floor(gridEl.clientWidth / cardWidth));
+        const cols = Math.max(1, Math.floor(gridEl.clientWidth / 216));
         let nextFilteredIdx = currentFilteredIdx;
 
-        if (e.key === 'ArrowRight') {
-            nextFilteredIdx = Math.min(filteredImages.length - 1, currentFilteredIdx + 1);
-            e.preventDefault();
-        } else if (e.key === 'ArrowLeft') {
-            nextFilteredIdx = Math.max(0, currentFilteredIdx - 1);
-            e.preventDefault();
-        } else if (e.key === 'ArrowDown') {
-            nextFilteredIdx = Math.min(filteredImages.length - 1, currentFilteredIdx + cols);
-            e.preventDefault();
-        } else if (e.key === 'ArrowUp') {
-            nextFilteredIdx = Math.max(0, currentFilteredIdx - cols);
-            e.preventDefault();
-        } else if (e.key === 'Enter') {
+        if (e.key === 'ArrowRight') nextFilteredIdx = Math.min(filteredImages.length - 1, currentFilteredIdx + 1);
+        else if (e.key === 'ArrowLeft') nextFilteredIdx = Math.max(0, currentFilteredIdx - 1);
+        else if (e.key === 'ArrowDown') nextFilteredIdx = Math.min(filteredImages.length - 1, currentFilteredIdx + cols);
+        else if (e.key === 'ArrowUp') nextFilteredIdx = Math.max(0, currentFilteredIdx - cols);
+        else if (e.key === 'Enter') {
             if (tagInput) tagInput.focus();
             e.preventDefault();
             return;
         }
 
         if (nextFilteredIdx !== currentFilteredIdx) {
-            const targetOriginalIdx = datasetImages.indexOf(filteredImages[nextFilteredIdx]);
-            selectImage(targetOriginalIdx, true);
-
+            e.preventDefault();
+            selectImage(datasetImages.indexOf(filteredImages[nextFilteredIdx]), true);
             const cardNode = gridEl.children[nextFilteredIdx];
-            if (cardNode) {
-                cardNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
+            if (cardNode) cardNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     });
   </script>
