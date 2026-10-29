@@ -892,6 +892,43 @@
             `;
             item.innerHTML = `<span>${tag}</span> <span style="color: #64748b;">${count}</span>`;
 
+            // --- Double-Click to Rename Globally ---
+            item.ondblclick = (e) => {
+                e.stopPropagation();
+                const newTagVal = prompt(`Rename tag "${tag}" globally across all images:`, tag);
+                if (newTagVal === null) return; // Cancelled
+
+                const trimmedNew = newTagVal.trim().toLowerCase();
+                if (!trimmedNew || trimmedNew === tag.toLowerCase()) return;
+
+                pushUndoState();
+
+                const updates = {};
+                datasetImages.forEach(img => {
+                    let changed = false;
+                    img.tags = img.tags.map(t => {
+                        if (t.toLowerCase() === tag.toLowerCase()) {
+                            changed = true;
+                            return trimmedNew;
+                        }
+                        return t;
+                    });
+                    if (changed) {
+                        img.tags = cleanImageTags(img.tags);
+                        updates[img.relative_path] = img.tags.join(', ');
+                    }
+                });
+
+                if (backend && Object.keys(updates).length > 0) {
+                    backend.saveBatchImageTags(JSON.stringify(updates));
+                }
+
+                selectedLeftTag = trimmedNew;
+                renderGlobalTagsList();
+                renderActiveTags();
+                renderGrid();
+            };
+
             item.onclick = (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.altKey) {
                     removeFromKeywords(tag);
