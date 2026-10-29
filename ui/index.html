@@ -312,7 +312,7 @@
           <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">Sort Tags</div>
           <div style="display: flex; gap: 6px;">
             <button onclick="sortActiveTags('alpha')" title="Sort active tags alphabetically (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort A-Z</button>
-            <button onclick="sortActiveTags('freq')" title="Sort active tags by frequency in dataset (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort Frequency</button>
+            <button onclick="sortActiveTags('freq')" title="Sort active tags by frequency in dataset (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort by Frequency</button>
           </div>
         </div>
       </div>
@@ -330,8 +330,9 @@
     let keywordsInput = null;
     let selectedLeftTag = null;
 
-    // --- Undo History Stack ---
+    // --- Undo / Redo History Stacks ---
     let undoStack = [];
+    let redoStack = [];
     const MAX_HISTORY = 50;
 
     // --- Tag Sanitization & Deduplication ---
@@ -424,73 +425,74 @@
         if (undoStack.length > MAX_HISTORY) {
             undoStack.shift();
         }
+        // Clear redo stack on any new user action
+        redoStack = [];
     }
-
-    // function performUndo() {
-    //     if (undoStack.length === 0) return;
-    //
-    //     const previousState = undoStack.pop();
-    //     const batchUpdates = {};
-    //
-    //     previousState.images.forEach(prevImg => {
-    //         const currentImg = datasetImages.find(img => img.relative_path === prevImg.relative_path);
-    //         if (currentImg) {
-    //             currentImg.tags = cleanImageTags([...prevImg.tags]);
-    //             batchUpdates[currentImg.relative_path] = currentImg.tags.join(', ');
-    //         }
-    //     });
-    //
-    //     if (keywordsInput) keywordsInput.value = previousState.keywords;
-    //     if (backend) {
-    //         backend.saveBatchImageTags(JSON.stringify(batchUpdates));
-    //         if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
-    //     }
-    //
-    //     selectedImageIndex = previousState.selectedImageIndex;
-    //
-    //     renderGlobalTagsList();
-    //     renderGrid();
-    //     if (selectedImageIndex !== null) {
-    //         selectImage(selectedImageIndex, true);
-    //     }
-    // }
 
     function performUndo() {
         if (undoStack.length === 0) return;
 
-        const previousState = undoStack.pop();
-        const batchUpdates = {};
+        // Save current state to redo stack before moving backward
+        const currentState = {
+            images: datasetImages.map(img => ({
+                relative_path: img.relative_path,
+                tags: [...img.tags]
+            })),
+            keywords: keywordsInput ? keywordsInput.value : "",
+            selectedImageIndex: selectedImageIndex
+        };
+        redoStack.push(currentState);
 
-        // Remember currently selected image's path to preserve focus
+        const previousState = undoStack.pop();
+        applyState(previousState);
+    }
+
+    function performRedo() {
+        if (redoStack.length === 0) return;
+
+        // Save current state to undo stack before moving forward
+        const currentState = {
+            images: datasetImages.map(img => ({
+                relative_path: img.relative_path,
+                tags: [...img.tags]
+            })),
+            keywords: keywordsInput ? keywordsInput.value : "",
+            selectedImageIndex: selectedImageIndex
+        };
+        undoStack.push(currentState);
+
+        const nextState = redoStack.pop();
+        applyState(nextState);
+    }
+
+    function applyState(targetState) {
+        const batchUpdates = {};
         let currentSelectedPath = null;
         if (selectedImageIndex !== null && datasetImages[selectedImageIndex]) {
             currentSelectedPath = datasetImages[selectedImageIndex].relative_path;
         }
 
-        // Check if this undo action restores a deleted image (previous state has paths not currently in datasetImages)
         const currentPaths = new Set(datasetImages.map(img => img.relative_path));
-        const missingPaths = previousState.images.filter(prevImg => !currentPaths.has(prevImg.relative_path));
-        const isImageDeletionUndo = missingPaths.length > 0;
+        const missingPaths = targetState.images.filter(prevImg => !currentPaths.has(prevImg.relative_path));
+        const isImageDeletionChange = missingPaths.length > 0;
 
-        if (isImageDeletionUndo) {
-            // 1. Restore deleted files on the backend
+        if (isImageDeletionChange) {
             missingPaths.forEach(prevImg => {
                 if (backend) {
                     backend.restoreImageAndTags(prevImg.relative_path);
                 }
             });
 
-            previousState.images.forEach(prevImg => {
+            targetState.images.forEach(prevImg => {
                 batchUpdates[prevImg.relative_path] = prevImg.tags.join(', ');
             });
 
-            if (keywordsInput) keywordsInput.value = previousState.keywords;
+            if (keywordsInput) keywordsInput.value = targetState.keywords;
             if (backend) {
                 backend.saveBatchImageTags(JSON.stringify(batchUpdates));
                 if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
             }
 
-            // 2. Re-fetch dataset ONLY for image deletion un-dos to load restored thumbnails correctly
             if (backend) {
                 backend.getDatasetImages(function(response) {
                     datasetImages = JSON.parse(response);
@@ -503,8 +505,8 @@
                     if (currentSelectedPath) {
                         targetIndex = datasetImages.findIndex(img => img.relative_path === currentSelectedPath);
                     }
-                    if (targetIndex === -1 && previousState.selectedImageIndex !== null) {
-                        targetIndex = Math.min(previousState.selectedImageIndex, datasetImages.length - 1);
+                    if (targetIndex === -1 && targetState.selectedImageIndex !== null) {
+                        targetIndex = Math.min(targetState.selectedImageIndex, datasetImages.length - 1);
                     }
 
                     if (targetIndex !== -1 && targetIndex < datasetImages.length) {
@@ -519,16 +521,15 @@
                 });
             }
         } else {
-            // 3. Standard Undo (Tag edits, reorders, keyword changes) -> Instant local update, NO re-fetch!
-            previousState.images.forEach(prevImg => {
+            targetState.images.forEach(prevImg => {
                 const img = datasetImages.find(i => i.relative_path === prevImg.relative_path);
                 if (img) {
                     img.tags = cleanImageTags([...prevImg.tags]);
-                    batchUpdates[img.relative_path] = img.tags.join(', ');
+                    batchUpdates[prevImg.relative_path] = img.tags.join(', ');
                 }
             });
 
-            if (keywordsInput) keywordsInput.value = previousState.keywords;
+            if (keywordsInput) keywordsInput.value = targetState.keywords;
             if (backend) {
                 backend.saveBatchImageTags(JSON.stringify(batchUpdates));
                 if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
@@ -536,13 +537,12 @@
 
             applyFilter();
 
-            // Restore selection locally without jumping
             let targetIndex = -1;
             if (currentSelectedPath) {
                 targetIndex = datasetImages.findIndex(img => img.relative_path === currentSelectedPath);
             }
-            if (targetIndex === -1 && previousState.selectedImageIndex !== null) {
-                targetIndex = Math.min(previousState.selectedImageIndex, datasetImages.length - 1);
+            if (targetIndex === -1 && targetState.selectedImageIndex !== null) {
+                targetIndex = Math.min(targetState.selectedImageIndex, datasetImages.length - 1);
             }
 
             if (targetIndex !== -1 && targetIndex < datasetImages.length) {
@@ -1429,6 +1429,14 @@
     document.addEventListener('keydown', function(e) {
         const activeInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input') || document.activeElement === keywordsInput;
 
+        // Ctrl+Shift+Z or Ctrl+Y for Redo
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            performRedo();
+            return;
+        }
+
+        // Ctrl+Z for Undo
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             performUndo();
