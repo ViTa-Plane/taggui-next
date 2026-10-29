@@ -231,7 +231,9 @@
       background-color: #12141c;
       border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 10px;
-      width: 380px;
+      width: 420px;
+      max-height: 85vh;
+      overflow-y: auto;
       padding: 20px;
       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
     }
@@ -251,6 +253,7 @@
           <button onclick="browseFolder()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">Open Dataset</button>
           <button onclick="openSettingsModal()" title="Configure Interrogator Settings" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⚙️ Settings</button>
           <button onclick="backend && backend.openExternalUrl('https://github.com/ViTa-Plane/taggui-next')" title="View source on GitHub" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⭐ GitHub</button>
+          <button onclick="openHelpModal()" title="Help & Shortcuts" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; flex-shrink: 0;">[?]</button>
         </div>
       </div>
     </div>
@@ -367,6 +370,49 @@
     </div>
   </div>
 
+  <!-- Help Modal Dialog -->
+  <div id="help-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="font-size: 13px; font-weight: bold; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Help & Keyboard Shortcuts</h2>
+        <button onclick="closeHelpModal()" style="background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">×</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px; font-size: 11px; color: #cbd5e1; line-height: 1.5;">
+        <div>
+          <strong style="color: #38bdf8; display: block; margin-bottom: 4px;">Navigation & Selection</strong>
+          <ul style="padding-left: 16px; display: flex; flex-direction: column; gap: 4px; font-family: monospace;">
+            <li><strong>Arrow Keys:</strong> Navigate through images in the grid</li>
+            <li><strong>Shift + Click:</strong> Multi-select range of images or add tag to selection</li>
+            <li><strong>Ctrl / Cmd + Click:</strong> Toggle individual image selection or add tag to keywords</li>
+            <li><strong>Ctrl / Cmd + A:</strong> Select all filtered images</li>
+            <li><strong>Escape:</strong> Clear selections or active filters</li>
+          </ul>
+        </div>
+
+        <div>
+          <strong style="color: #38bdf8; display: block; margin-bottom: 4px;">Tag Editing & Management</strong>
+          <ul style="padding-left: 16px; display: flex; flex-direction: column; gap: 4px; font-family: monospace;">
+            <li><strong>Double-Click Tag:</strong> Rename tag globally or edit individual tag</li>
+            <li><strong>Drag & Drop Tags:</strong> Reorder tags on the selected image</li>
+            <li><strong>Ctrl / Cmd + Z:</strong> Undo last change</li>
+            <li><strong>Ctrl / Cmd + Shift + Z:</strong> Redo last change</li>
+            <li><strong>Delete / Backspace:</strong> Delete selected tag globally (when tag is focused)</li>
+          </ul>
+        </div>
+
+        <div>
+          <strong style="color: #38bdf8; display: block; margin-bottom: 4px;">Local AutoTagging</strong>
+          <p style="color: #94a3b8; font-family: sans-serif;">Click <strong>✨ AutoTag</strong> to analyze images locally using the WD-EVA02 Tagger model. Configure confidence thresholds and strategies via the <strong>⚙️ Settings</strong> button.</p>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+        <button onclick="closeHelpModal()" style="background: #6366f1; border: none; color: white; font-size: 11px; font-weight: bold; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Got It</button>
+      </div>
+    </div>
+  </div>
+
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script>
     let backend = null;
@@ -422,6 +468,15 @@
             backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
         }
         closeSettingsModal();
+    }
+
+    // --- Global Help Modal Handlers ---
+    function openHelpModal() {
+        document.getElementById('help-modal').style.display = 'flex';
+    }
+
+    function closeHelpModal() {
+        document.getElementById('help-modal').style.display = 'none';
     }
 
     function cleanImageTags(tags) {
@@ -543,9 +598,11 @@
 
     function applyState(targetState) {
         const batchUpdates = {};
-        let currentSelectedPath = null;
-        if (selectedImageIndex !== null && datasetImages[selectedImageIndex]) {
-            currentSelectedPath = datasetImages[selectedImageIndex].relative_path;
+
+        // Find the specific image path that was selected in the target snapshot, if available
+        let targetSelectedPath = null;
+        if (targetState.selectedImageIndex !== null && targetState.images[targetState.selectedImageIndex]) {
+            targetSelectedPath = targetState.images[targetState.selectedImageIndex].relative_path;
         }
 
         const currentPaths = new Set(datasetImages.map(img => img.relative_path));
@@ -570,6 +627,12 @@
                 datasetImages = JSON.parse(response);
                 datasetImages.forEach(img => img.tags = cleanImageTags(img.tags));
                 applyFilter();
+
+                // Restore selected image accurately by path
+                if (targetSelectedPath) {
+                    const idx = datasetImages.findIndex(img => img.relative_path === targetSelectedPath);
+                    if (idx !== -1) selectImage(idx, true);
+                }
             });
         } else {
             targetState.images.forEach(prevImg => {
@@ -588,6 +651,14 @@
                 }
             }
             applyFilter();
+
+            // Restore selected image accurately by path without jumping to the top
+            if (targetSelectedPath) {
+                const idx = datasetImages.findIndex(img => img.relative_path === targetSelectedPath);
+                if (idx !== -1) {
+                    selectImage(idx, true);
+                }
+            }
         }
     }
 
