@@ -869,6 +869,7 @@
         });
 
         const sortedTags = Object.entries(tagCounts).sort((a,b) => b[1] - a[1]);
+        let firstMatchNode = null;
 
         sortedTags.forEach(([tag, count]) => {
             const isHighlighted = currentQuery && tag.toLowerCase().includes(currentQuery);
@@ -938,8 +939,19 @@
                     renderGlobalTagsList();
                 }
             };
+
             container.appendChild(item);
+
+            // Track the first matching tag element
+            if (isHighlighted && !firstMatchNode) {
+                firstMatchNode = item;
+            }
         });
+
+        // Smoothly scroll the left panel to the first matched tag if a filter is active
+        if (firstMatchNode) {
+            firstMatchNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     }
 
     function renderActiveTags() {
