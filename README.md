@@ -1,0 +1,69 @@
+# TagGUI-Next
+
+<img src='icon.png' alt='TagGUI-Next icon' width='128'>
+
+**TagGUI-Next** is a fast, modern, and self-contained local dataset manager and tagger built with **PySide6**, **PyTorch**, and **timm**. Designed to replace unstable external APIs, it provides an intuitive HTML5/JavaScript GUI powered by `QWebChannel` for effortless tagging, bulk editing, and dataset organization for machine learning models (such as Stable Diffusion).
+
+---
+
+<img src='assets/TagGUI-Next.png' alt='TagGUI-Next' width='100%'>
+
+
+## Key Features
+
+- **Local PyTorch Tagger**: Powered by local models (like `wd-eva02-large-tagger-v3`) with full CUDA 13 support—no external API servers required.
+- **Modern HTML5/JS GUI**: Clean, responsive, dark-themed interface running smoothly via Qt WebEngine.
+- **Advanced Tag Management**:
+  - Global tag list with usage counts and search/filter.
+  - Double-click to rename tags globally across all images.
+  - Drag-and-drop tag reordering on active images.
+  - Multi-select support (Shift+Click and Ctrl+Click).
+- **Keyword & Strategy Management**: 
+  - Define custom training keywords that prepend and auto-sort.
+  - Configure AutoTag behavior to either **Add** or **Replace** existing tags via a built-in Settings modal.
+- **Token Estimation**: Real-time context token counter with visual warning thresholds for prompt limits (e.g., 75 tokens).
+- ** Robust Undo/Redo History**: Comprehensive history stack supporting `Ctrl+Z` and `Ctrl+Shift+Z` across tag edits, additions, and deletions.
+- **Comprehensive Keyboard Shortcuts**: Fast navigation and workflow control using arrow keys, shortcuts, and batch selection.
+
+---
+## Controls
+
+- Arrow Keys,Navigate through dataset images
+- Shift + Click,Multi-select range of images / add tag to selection
+- Ctrl / Cmd + Click,Toggle individual image selection
+- Ctrl / Cmd + A,Select all filtered images
+- Ctrl / Cmd + Z,Undo last change
+- Ctrl / Cmd + Shift + Z,Redo last change
+- Delete / Backspace,Delete selected global tag from all images
+- Escape,Clear filters and selections
+    
+---
+## Usage
+
+Load the directory containing your images Dataset by clicking the `Open Dataset`
+button in the top right of the window. Tags are loaded from `.txt` files in the directory with the same names as the
+images.Any changes you make to the tags are also automatically saved to these `.txt`
+files.
+
+## Automatic Captioning
+
+In addition to manual tagging, you can automatically generate captions or tags
+for your images inside ***TagGUI-Next***.
+
+GPU generation requires a compatible NVIDIA GPU, and CPU generation is also
+supported as a fallback.
+
+To use the feature, select the images you want to caption in the image list,
+then click the AutoTag button.
+
+## Installation & Setup
+
+**Clone the repository:**
+   ```bash
+     git clone https://github.com/ViTa-Plane/taggui-next.git
+     cd taggui-next
+  ```
+- run install.bat to automatically set the python_embeded and to  install the requirements
+- start the TagGUI-Next with run.bat
+    
+
