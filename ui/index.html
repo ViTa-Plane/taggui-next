@@ -231,7 +231,7 @@
       background-color: #12141c;
       border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 10px;
-      width: 420px;
+      width: 440px;
       max-height: 85vh;
       overflow-y: auto;
       padding: 20px;
@@ -353,13 +353,28 @@
 
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div>
-          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">General Threshold (0.0 - 1.0)</label>
-          <input id="setting-general-threshold" type="number" step="0.05" min="0" max="1" class="text-input" />
+          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Interrogator Model ([Installed] marked)</label>
+          <select id="setting-model-name" class="text-input" style="background-color: #181a24; color: #e2e8f0; cursor: pointer;" onchange="onModelSelectedChange()">
+            <!-- Populated dynamically -->
+          </select>
         </div>
-        <div>
-          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Character Threshold (0.0 - 1.0)</label>
-          <input id="setting-character-threshold" type="number" step="0.05" min="0" max="1" class="text-input" />
+
+        <div id="group-tagger-settings">
+          <div>
+            <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">General Threshold (0.0 - 1.0)</label>
+            <input id="setting-general-threshold" type="number" step="0.05" min="0" max="1" class="text-input" />
+          </div>
+          <div style="margin-top: 8px;">
+            <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Character Threshold (0.0 - 1.0)</label>
+            <input id="setting-character-threshold" type="number" step="0.05" min="0" max="1" class="text-input" />
+          </div>
         </div>
+
+        <div id="group-captioner-settings" style="display: none;">
+          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Task Command / Prompt Mode</label>
+          <select id="setting-task-command" class="text-input" style="background-color: #181a24; color: #e2e8f0; cursor: pointer;"></select>
+        </div>
+
         <div>
           <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">AutoTag Mode</label>
           <select id="setting-tag-strategy" class="text-input" style="background-color: #181a24; color: #e2e8f0; cursor: pointer;">
@@ -409,7 +424,7 @@
 
         <div>
           <strong style="color: #38bdf8; display: block; margin-bottom: 4px;">Local AutoTagging</strong>
-          <p style="color: #94a3b8; font-family: sans-serif;">Click <strong>✨ AutoTag</strong> to analyze images locally using the WD-EVA02 Tagger model. Configure confidence thresholds and strategies via the <strong>⚙️ Settings</strong> button.</p>
+          <p style="color: #94a3b8; font-family: sans-serif;">Click <strong>✨ AutoTag</strong> to analyze images locally using your selected model. Configure models, confidence thresholds, and strategies via the <strong>⚙️ Settings</strong> button.</p>
         </div>
       </div>
 
@@ -429,6 +444,7 @@
     let lastClickedIndex = null;
     let keywordsInput = null;
     let selectedLeftTag = null;
+    let availableInterrogators = [];
 
     let undoStack = [];
     let redoStack = [];
@@ -436,23 +452,102 @@
 
     let currentSettingsData = {
         keywords: "",
+        model_name: "SmilingWolf/wd-eva02-large-tagger-v3",
         general_threshold: 0.35,
         character_threshold: 0.85,
-        tag_strategy: "add"
+        tag_strategy: "add",
+        task_command: "<CAPTION>"
     };
+
+    // --- Helper: Deduplicated & Unified Selected Indices ---
+    function getSelectedIndices() {
+        const set = new Set(multiSelectedIndices);
+        if (selectedImageIndex !== null) {
+            set.add(selectedImageIndex);
+        }
+        return Array.from(set).filter(idx => idx !== null && idx >= 0);
+    }
 
     // --- Global Settings Modal Handlers ---
     function openSettingsModal() {
-        if (backend) {
+        if (!backend) return;
+        backend.getAvailableInterrogators(function(res) {
+            try {
+                availableInterrogators = JSON.parse(res);
+            } catch(e) {
+                availableInterrogators = [];
+            }
+            populateModelDropdown();
+
             backend.getDatasetSettings(function(settingsRes) {
                 try {
                     currentSettingsData = JSON.parse(settingsRes);
                 } catch(e) {}
+
+                document.getElementById('setting-model-name').value = currentSettingsData.model_name || "SmilingWolf/wd-eva02-large-tagger-v3";
                 document.getElementById('setting-general-threshold').value = currentSettingsData.general_threshold ?? 0.35;
                 document.getElementById('setting-character-threshold').value = currentSettingsData.character_threshold ?? 0.85;
                 document.getElementById('setting-tag-strategy').value = currentSettingsData.tag_strategy ?? "add";
+
+                onModelSelectedChange();
                 document.getElementById('settings-modal').style.display = 'flex';
             });
+        });
+    }
+
+    function populateModelDropdown() {
+        const select = document.getElementById('setting-model-name');
+        select.innerHTML = '';
+
+        const families = {};
+        availableInterrogators.forEach(item => {
+            if (!families[item.family]) families[item.family] = [];
+            families[item.family].push(item);
+        });
+
+        for (const [familyName, models] of Object.entries(families)) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = familyName;
+
+            models.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.name;
+                if (m.installed) {
+                    opt.style.color = '#34d399';
+                    opt.style.fontWeight = 'bold';
+                }
+                optgroup.appendChild(opt);
+            });
+            select.appendChild(optgroup);
+        }
+    }
+
+    function onModelSelectedChange() {
+        const selectedId = document.getElementById('setting-model-name').value;
+        const modelInfo = availableInterrogators.find(m => m.id === selectedId);
+
+        const taggerGroup = document.getElementById('group-tagger-settings');
+        const captionerGroup = document.getElementById('group-captioner-settings');
+        const taskCmdSelect = document.getElementById('setting-task-command');
+
+        if (modelInfo && (modelInfo.category === 'florence2' || modelInfo.category === 'moondream')) {
+            taggerGroup.style.display = 'none';
+            captionerGroup.style.display = 'block';
+
+            taskCmdSelect.innerHTML = '';
+            (modelInfo.commands || []).forEach(cmd => {
+                const opt = document.createElement('option');
+                opt.value = cmd;
+                opt.textContent = cmd;
+                taskCmdSelect.appendChild(opt);
+            });
+            if (currentSettingsData.task_command) {
+                taskCmdSelect.value = currentSettingsData.task_command;
+            }
+        } else {
+            taggerGroup.style.display = 'block';
+            captionerGroup.style.display = 'none';
         }
     }
 
@@ -465,9 +560,16 @@
         const charVal = parseFloat(document.getElementById('setting-character-threshold').value);
         const stratVal = document.getElementById('setting-tag-strategy').value;
 
+        currentSettingsData.model_name = document.getElementById('setting-model-name').value;
         currentSettingsData.general_threshold = isNaN(genVal) ? 0.35 : genVal;
         currentSettingsData.character_threshold = isNaN(charVal) ? 0.85 : charVal;
         currentSettingsData.tag_strategy = stratVal;
+
+        const taskCmdSelect = document.getElementById('setting-task-command');
+        if (taskCmdSelect && taskCmdSelect.offsetParent !== null) {
+            currentSettingsData.task_command = taskCmdSelect.value;
+        }
+
         if (keywordsInput) currentSettingsData.keywords = keywordsInput.value;
 
         if (backend) {
@@ -605,7 +707,6 @@
     function applyState(targetState) {
         const batchUpdates = {};
 
-        // Find the specific image path that was selected in the target snapshot, if available
         let targetSelectedPath = null;
         if (targetState.selectedImageIndex !== null && targetState.images[targetState.selectedImageIndex]) {
             targetSelectedPath = targetState.images[targetState.selectedImageIndex].relative_path;
@@ -634,7 +735,6 @@
                 datasetImages.forEach(img => img.tags = cleanImageTags(img.tags));
                 applyFilter();
 
-                // Restore selected image accurately by path
                 if (targetSelectedPath) {
                     const idx = datasetImages.findIndex(img => img.relative_path === targetSelectedPath);
                     if (idx !== -1) selectImage(idx, true);
@@ -658,7 +758,6 @@
             }
             applyFilter();
 
-            // Restore selected image accurately by path without jumping to the top
             if (targetSelectedPath) {
                 const idx = datasetImages.findIndex(img => img.relative_path === targetSelectedPath);
                 if (idx !== -1) {
@@ -841,12 +940,22 @@
     }
 
     function updateSelectionStatusText() {
-        const selectedCount = selectedImageIndex !== null ? 1 + multiSelectedIndices.size : 0;
+        const selectedCount = getSelectedIndices().length;
         document.getElementById('selection-counter').innerText = `${selectedCount} / ${filteredImages.length} selected`;
     }
 
+    // function clearMultiSelection() {
+    //     multiSelectedIndices.clear();
+    //     updateGridSelectionUI();
+    // }
+
     function clearMultiSelection() {
         multiSelectedIndices.clear();
+        selectedImageIndex = null;
+        document.getElementById('selected-filename').innerText = "No image selected";
+        document.getElementById('active-tags-container').innerHTML = '';
+        document.getElementById('active-tag-count').innerText = "Tags (0)";
+        updateTokenDisplay("");
         updateGridSelectionUI();
     }
 
@@ -915,7 +1024,6 @@
             `;
             item.innerHTML = `<span>${tag}</span> <span style="color: #64748b;">${count}</span>`;
 
-            // Double-Click to Rename Globally
             item.ondblclick = (e) => {
                 e.stopPropagation();
                 const newTagVal = prompt(`Rename tag "${tag}" globally across all images:`, tag);
@@ -958,7 +1066,7 @@
                     e.stopPropagation();
                 } else if (e.shiftKey && e.altKey) {
                     pushUndoState();
-                    const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)].filter(idx => idx !== null);
+                    const targets = getSelectedIndices();
                     const updates = {};
                     targets.forEach(idx => {
                         const img = datasetImages[idx];
@@ -972,7 +1080,7 @@
                     e.stopPropagation();
                 } else if (e.shiftKey) {
                     pushUndoState();
-                    const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)].filter(idx => idx !== null);
+                    const targets = getSelectedIndices();
                     const updates = {};
                     targets.forEach(idx => {
                         const img = datasetImages[idx];
@@ -1186,7 +1294,7 @@
     function addTagToSelection(newTag) {
         if (!newTag || selectedImageIndex === null) return;
         pushUndoState();
-        const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
+        const targets = getSelectedIndices();
         const updates = {};
         targets.forEach(idx => {
             const img = datasetImages[idx];
@@ -1257,7 +1365,7 @@
         if (rawKeywords.length === 0) return;
 
         pushUndoState();
-        const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
+        const targets = getSelectedIndices();
         const updates = {};
         targets.forEach(idx => {
             const img = datasetImages[idx];
@@ -1296,45 +1404,52 @@
             return;
         }
 
-        const targets = [selectedImageIndex, ...Array.from(multiSelectedIndices)];
+        const targets = getSelectedIndices();
         if (!confirm(`Run Local PyTorch AutoTag for ${targets.length} selected image(s)?`)) return;
 
         pushUndoState();
-        let completed = 0;
-        const batchUpdates = {};
-        const strategy = currentSettingsData.tag_strategy || "add";
+        const pathsToProcess = targets.map(idx => datasetImages[idx].relative_path).filter(p => p);
+        if (pathsToProcess.length === 0) return;
 
-        targets.forEach((idx) => {
-            const img = datasetImages[idx];
-            if (!img) return;
+        if (backend && typeof backend.autoTagBatch === 'function') {
+            backend.autoTagBatch(JSON.stringify(pathsToProcess), function(resultsJson) {
+                try {
+                    const results = JSON.parse(resultsJson);
+                    const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
+                    const strategy = currentSettingsData.tag_strategy || "add";
 
-            if (backend && typeof backend.autoTagImage === 'function') {
-                backend.autoTagImage(img.relative_path, (returnedTagsStr) => {
-                    if (returnedTagsStr) {
-                        const newTags = returnedTagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
-                        const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
+                    targets.forEach(idx => {
+                        const img = datasetImages[idx];
+                        if (img && results[img.relative_path]) {
+                            const returnedTagsStr = results[img.relative_path];
+                            const newTags = returnedTagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
 
-                        if (strategy === "replace") {
-                            img.tags = cleanImageTags([...activeKeywords, ...newTags]);
-                        } else {
-                            const remainingExisting = img.tags.filter(t => !activeKeywords.includes(t.toLowerCase()));
-                            img.tags = cleanImageTags([...activeKeywords, ...newTags, ...remainingExisting]);
+                            if (strategy === "replace") {
+                                img.tags = cleanImageTags([...activeKeywords, ...newTags]);
+                            } else {
+                                const remainingExisting = img.tags.filter(t => !activeKeywords.includes(t.toLowerCase()));
+                                img.tags = cleanImageTags([...activeKeywords, ...newTags, ...remainingExisting]);
+                            }
                         }
-                        batchUpdates[img.relative_path] = img.tags.join(', ');
+                    });
+
+                    const batchUpdates = {};
+                    targets.forEach(idx => {
+                        const img = datasetImages[idx];
+                        if (img) batchUpdates[img.relative_path] = img.tags.join(', ');
+                    });
+                    if (Object.keys(batchUpdates).length > 0) {
+                        backend.saveBatchImageTags(JSON.stringify(batchUpdates));
                     }
 
-                    completed++;
-                    if (completed === targets.length) {
-                        if (backend && Object.keys(batchUpdates).length > 0) {
-                            backend.saveBatchImageTags(JSON.stringify(batchUpdates));
-                        }
-                        renderActiveTags();
-                        renderGlobalTagsList();
-                        renderGrid();
-                    }
-                });
-            }
-        });
+                    renderActiveTags();
+                    renderGlobalTagsList();
+                    renderGrid();
+                } catch(e) {
+                    console.error("Batch tag processing response error:", e);
+                }
+            });
+        }
     }
 
     const tagInput = document.getElementById('tag-input');
@@ -1385,6 +1500,19 @@
 
     document.addEventListener('keydown', function(e) {
         const activeInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input') || document.activeElement === keywordsInput;
+
+        // Add Ctrl+D / Cmd+D to deselect all images
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && !activeInput) {
+            e.preventDefault();
+            multiSelectedIndices.clear();
+            selectedImageIndex = null;
+            document.getElementById('selected-filename').innerText = "No image selected";
+            document.getElementById('active-tags-container').innerHTML = '';
+            document.getElementById('active-tag-count').innerText = "Tags (0)";
+            updateTokenDisplay(""); // Reset token counter and progress bar to 0
+            updateGridSelectionUI();
+            return;
+        }
 
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
             e.preventDefault();
