@@ -31,6 +31,7 @@
       align-items: center;
       justify-content: space-between;
       flex-shrink: 0;
+      gap: 16px;
     }
     .text-input {
       background-color: #181a24;
@@ -143,6 +144,30 @@
       border-radius: 4px;
       pointer-events: none;
     }
+    .badge-delete {
+      position: absolute;
+      top: 6px; right: 6px;
+      background: rgba(239, 68, 68, 0.85);
+      color: #fff;
+      font-weight: bold;
+      font-size: 10px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s, background-color 0.15s;
+      z-index: 10;
+    }
+    .image-card:hover .badge-delete {
+      opacity: 1;
+    }
+    .badge-delete:hover {
+      background: rgba(220, 38, 38, 1);
+    }
 
     .container-pad { padding: 12px; }
     .tags-container { padding: 12px; overflow-y: auto; flex: 1; min-height: 0; }
@@ -199,21 +224,22 @@
 <body>
 
   <header>
-    <div style="display: flex; align-items: center; gap: 12px;">
-      <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">T</div>
-      <div>
+    <div style="display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; overflow: hidden;">
+      <div style="width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; flex-shrink: 0;">T</div>
+      <div style="min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; overflow: hidden;">
         <h1 style="font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
           TagGUI <span style="font-size: 9px; background: rgba(99,102,241,0.2); color: #818cf8; padding: 1px 5px; border-radius: 4px; font-family: monospace; border: 1px solid rgba(99,102,241,0.3);">NEXT</span>
         </h1>
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <p id="dataset-path-label" style="font-size: 10px; color: #94a3b8; font-family: monospace; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading...</p>
-          <button onclick="browseFolder()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 1px 6px; border-radius: 4px; cursor: pointer;">Change</button>
+        <div style="display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%;">
+          <!-- Fluid flex container with left-truncation (rtl) for deep subfolder paths -->
+          <p id="dataset-path-label" title="Dataset Path" style="font-size: 10px; color: #94a3b8; font-family: monospace; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;">Loading...</p>
+          <button onclick="browseFolder()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">Open Dataset</button>
         </div>
       </div>
     </div>
 
     <!-- Search Bar Wrapper with Flex Layout & Clear Button -->
-    <div style="flex: 1; max-width: 450px; margin: 0 24px; position: relative; display: flex; align-items: center; background-color: #181a24; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding-right: 8px;">
+    <div style="width: 100%; max-width: 350px; position: relative; display: flex; align-items: center; background-color: #181a24; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding-right: 8px; flex-shrink: 0;">
       <input id="filter-input" type="text" aria-label="Filter dataset" placeholder='Filter (name or tag, e.g. cat), Ctrl+F...' oninput="onFilterInputChanged()" style="flex: 1; background: transparent; border: none; padding: 6px 12px; color: #e2e8f0; font-size: 12px; font-family: monospace; outline: none;" />
 
       <button id="clear-filter-btn" onclick="clearFilter()" title="Clear filter" style="background: none; border: none; color: #64748b; font-size: 14px; font-weight: bold; cursor: pointer; display: none; padding: 0 6px; align-items: center; justify-content: center;">×</button>
@@ -281,6 +307,14 @@
             <div id="token-progress" style="background-color: #6366f1; height: 100%; width: 0%; transition: width 0.2s, background-color 0.2s;"></div>
           </div>
         </div>
+
+        <div class="token-box">
+          <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">Sort Tags</div>
+          <div style="display: flex; gap: 6px;">
+            <button onclick="sortActiveTags('alpha')" title="Sort active tags alphabetically (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort A-Z</button>
+            <button onclick="sortActiveTags('freq')" title="Sort active tags by frequency in dataset (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort Frequency</button>
+          </div>
+        </div>
       </div>
     </aside>
   </div>
@@ -309,7 +343,7 @@
             const lower = trimmed.toLowerCase();
             if (!lower) return false;
             if (seen.has(lower)) {
-                return false; // Drops duplicate starting from the last/subsequent occurrences
+                return false;
             }
             seen.add(lower);
             return true;
@@ -392,33 +426,139 @@
         }
     }
 
+    // function performUndo() {
+    //     if (undoStack.length === 0) return;
+    //
+    //     const previousState = undoStack.pop();
+    //     const batchUpdates = {};
+    //
+    //     previousState.images.forEach(prevImg => {
+    //         const currentImg = datasetImages.find(img => img.relative_path === prevImg.relative_path);
+    //         if (currentImg) {
+    //             currentImg.tags = cleanImageTags([...prevImg.tags]);
+    //             batchUpdates[currentImg.relative_path] = currentImg.tags.join(', ');
+    //         }
+    //     });
+    //
+    //     if (keywordsInput) keywordsInput.value = previousState.keywords;
+    //     if (backend) {
+    //         backend.saveBatchImageTags(JSON.stringify(batchUpdates));
+    //         if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
+    //     }
+    //
+    //     selectedImageIndex = previousState.selectedImageIndex;
+    //
+    //     renderGlobalTagsList();
+    //     renderGrid();
+    //     if (selectedImageIndex !== null) {
+    //         selectImage(selectedImageIndex, true);
+    //     }
+    // }
+
     function performUndo() {
         if (undoStack.length === 0) return;
 
         const previousState = undoStack.pop();
         const batchUpdates = {};
 
-        previousState.images.forEach(prevImg => {
-            const currentImg = datasetImages.find(img => img.relative_path === prevImg.relative_path);
-            if (currentImg) {
-                currentImg.tags = cleanImageTags([...prevImg.tags]);
-                batchUpdates[currentImg.relative_path] = currentImg.tags.join(', ');
+        // Remember currently selected image's path to preserve focus
+        let currentSelectedPath = null;
+        if (selectedImageIndex !== null && datasetImages[selectedImageIndex]) {
+            currentSelectedPath = datasetImages[selectedImageIndex].relative_path;
+        }
+
+        // Check if this undo action restores a deleted image (previous state has paths not currently in datasetImages)
+        const currentPaths = new Set(datasetImages.map(img => img.relative_path));
+        const missingPaths = previousState.images.filter(prevImg => !currentPaths.has(prevImg.relative_path));
+        const isImageDeletionUndo = missingPaths.length > 0;
+
+        if (isImageDeletionUndo) {
+            // 1. Restore deleted files on the backend
+            missingPaths.forEach(prevImg => {
+                if (backend) {
+                    backend.restoreImageAndTags(prevImg.relative_path);
+                }
+            });
+
+            previousState.images.forEach(prevImg => {
+                batchUpdates[prevImg.relative_path] = prevImg.tags.join(', ');
+            });
+
+            if (keywordsInput) keywordsInput.value = previousState.keywords;
+            if (backend) {
+                backend.saveBatchImageTags(JSON.stringify(batchUpdates));
+                if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
             }
-        });
 
-        if (keywordsInput) keywordsInput.value = previousState.keywords;
-        if (backend) {
-            backend.saveBatchImageTags(JSON.stringify(batchUpdates));
-            if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
+            // 2. Re-fetch dataset ONLY for image deletion un-dos to load restored thumbnails correctly
+            if (backend) {
+                backend.getDatasetImages(function(response) {
+                    datasetImages = JSON.parse(response);
+                    datasetImages.forEach(img => {
+                        img.tags = cleanImageTags(img.tags);
+                    });
+                    applyFilter();
+
+                    let targetIndex = -1;
+                    if (currentSelectedPath) {
+                        targetIndex = datasetImages.findIndex(img => img.relative_path === currentSelectedPath);
+                    }
+                    if (targetIndex === -1 && previousState.selectedImageIndex !== null) {
+                        targetIndex = Math.min(previousState.selectedImageIndex, datasetImages.length - 1);
+                    }
+
+                    if (targetIndex !== -1 && targetIndex < datasetImages.length) {
+                        selectImage(targetIndex, true);
+                        const gridEl = document.getElementById('image-grid');
+                        const filteredIdx = filteredImages.indexOf(datasetImages[targetIndex]);
+                        const cardNode = gridEl.children[filteredIdx];
+                        if (cardNode) {
+                            cardNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                    }
+                });
+            }
+        } else {
+            // 3. Standard Undo (Tag edits, reorders, keyword changes) -> Instant local update, NO re-fetch!
+            previousState.images.forEach(prevImg => {
+                const img = datasetImages.find(i => i.relative_path === prevImg.relative_path);
+                if (img) {
+                    img.tags = cleanImageTags([...prevImg.tags]);
+                    batchUpdates[img.relative_path] = img.tags.join(', ');
+                }
+            });
+
+            if (keywordsInput) keywordsInput.value = previousState.keywords;
+            if (backend) {
+                backend.saveBatchImageTags(JSON.stringify(batchUpdates));
+                if (keywordsInput) backend.saveDatasetSettings(keywordsInput.value);
+            }
+
+            applyFilter();
+
+            // Restore selection locally without jumping
+            let targetIndex = -1;
+            if (currentSelectedPath) {
+                targetIndex = datasetImages.findIndex(img => img.relative_path === currentSelectedPath);
+            }
+            if (targetIndex === -1 && previousState.selectedImageIndex !== null) {
+                targetIndex = Math.min(previousState.selectedImageIndex, datasetImages.length - 1);
+            }
+
+            if (targetIndex !== -1 && targetIndex < datasetImages.length) {
+                selectImage(targetIndex, true);
+            }
         }
+    }
 
-        selectedImageIndex = previousState.selectedImageIndex;
-
-        renderGlobalTagsList();
-        renderGrid();
-        if (selectedImageIndex !== null) {
-            selectImage(selectedImageIndex, true);
+    // Helper hash function used for matching thumb generation naming convention
+    function absHash(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash |= 0;
         }
+        return Math.abs(hash);
     }
 
     new QWebChannel(qt.webChannelTransport, function(channel) {
@@ -450,12 +590,42 @@
     function updateDatasetUI() {
         document.getElementById('total-count').innerText = datasetImages.length;
         document.getElementById('image-count').innerText = filteredImages.length;
-        document.getElementById('dataset-path-label').innerText = backend && backend.dataset_path ? backend.dataset_path : "Dataset";
+
+        let rawPath = "";
+        if (backend) {
+            if (typeof backend.dataset_path_str === 'string') {
+                rawPath = backend.dataset_path_str;
+            } else if (typeof backend.dataset_path === 'string') {
+                rawPath = backend.dataset_path;
+            } else if (backend.dataset_path && typeof backend.dataset_path.toString === 'function') {
+                rawPath = backend.dataset_path.toString();
+            }
+        }
+
+        const pathLabelEl = document.getElementById('dataset-path-label');
+
+        if (rawPath) {
+            const normalized = rawPath.replace(/\\/g, '/');
+            const parts = normalized.split('/').filter(p => p.length > 0);
+            
+            if (parts.length > 0) {
+                const hasDrive = parts[0].includes(':');
+                const joinedPath = parts.join('\\');
+                pathLabelEl.innerText = hasDrive ? joinedPath : `\\${joinedPath}\\`;
+            } else {
+                pathLabelEl.innerText = "\\";
+            }
+            pathLabelEl.title = rawPath;
+        } else {
+            pathLabelEl.innerText = "No Dataset Loaded";
+            pathLabelEl.title = "";
+        }
 
         renderGlobalTagsList();
         renderGrid();
         if (filteredImages.length > 0 && selectedImageIndex === null) {
-            selectImage(0, false);
+            const firstOriginalIdx = datasetImages.indexOf(filteredImages[0]);
+            selectImage(firstOriginalIdx, true);
         }
     }
 
@@ -533,6 +703,7 @@
                 <img src="${img.url}" loading="lazy" onerror="this.style.display='none'" />
                 <div class="badge-filename">${img.filename}</div>
                 <div class="badge-tagged" style="display: ${hasTags ? 'block' : 'none'};">TAGGED</div>
+                <div class="badge-delete" title="Delete image & tags" onclick="promptDeleteImage(event, ${originalIdx})">×</div>
             `;
 
             card.onclick = (e) => {
@@ -559,6 +730,44 @@
             grid.appendChild(card);
         });
         updateSelectionStatusText();
+    }
+
+    function promptDeleteImage(event, originalIdx) {
+        event.stopPropagation();
+        const img = datasetImages[originalIdx];
+        if (!img) return;
+
+        if (!confirm(`Are you sure you want to delete "${img.filename}" and its .txt tags file? It will be moved to your system recycle bin.`)) {
+            return;
+        }
+
+        pushUndoState();
+
+        if (backend) {
+            backend.deleteImageAndTags(img.relative_path, (success) => {
+                if (!success) {
+                    alert("Failed to delete image on backend.");
+                    return;
+                }
+            });
+        }
+
+        datasetImages.splice(originalIdx, 1);
+        
+        multiSelectedIndices.delete(originalIdx);
+        const newMulti = new Set();
+        multiSelectedIndices.forEach(idx => {
+            newMulti.add(idx > originalIdx ? idx - 1 : idx);
+        });
+        multiSelectedIndices = newMulti;
+
+        if (selectedImageIndex === originalIdx) {
+            selectedImageIndex = datasetImages.length > 0 ? Math.min(originalIdx, datasetImages.length - 1) : null;
+        } else if (selectedImageIndex > originalIdx) {
+            selectedImageIndex--;
+        }
+
+        applyFilter();
     }
 
     function selectImage(idx, updateUI = true) {
@@ -744,13 +953,106 @@
         const currentQuery = document.getElementById('filter-input').value.trim().toLowerCase();
         const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
 
+        let dropIndicator = document.getElementById('tag-drop-indicator');
+        if (!dropIndicator) {
+            dropIndicator = document.createElement('div');
+            dropIndicator.id = 'tag-drop-indicator';
+            dropIndicator.style.cssText = `
+                width: 3px;
+                background-color: #38bdf8;
+                box-shadow: 0 0 8px #38bdf8;
+                border-radius: 2px;
+                margin: 0 2px;
+                pointer-events: none;
+                display: none;
+            `;
+        }
+
+        let targetDropIdx = null;
+
+        container.ondragover = (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            const chips = Array.from(container.querySelectorAll('.tag-chip'));
+            if (chips.length === 0) return;
+
+            let closestChip = null;
+            let closestDistance = Infinity;
+            let insertBefore = true;
+
+            chips.forEach(chip => {
+                const rect = chip.getBoundingClientRect();
+                const midX = rect.left + rect.width / 2;
+                const midY = rect.top + rect.height / 2;
+
+                const dist = Math.hypot(e.clientX - midX, e.clientY - midY);
+                if (dist < closestDistance) {
+                    closestDistance = dist;
+                    closestChip = chip;
+                    insertBefore = e.clientX < midX;
+                }
+            });
+
+            if (closestChip) {
+                dropIndicator.style.display = 'inline-block';
+                dropIndicator.style.height = `${closestChip.offsetHeight || 22}px`;
+
+                const idx = parseInt(closestChip.dataset.index);
+                if (insertBefore) {
+                    container.insertBefore(dropIndicator, closestChip);
+                    targetDropIdx = idx;
+                } else {
+                    container.insertBefore(dropIndicator, closestChip.nextSibling);
+                    targetDropIdx = idx + 1;
+                }
+            }
+        };
+
+        container.ondrop = (e) => {
+            e.preventDefault();
+            const fromIdxStr = e.dataTransfer.getData('text/plain');
+            if (!fromIdxStr && fromIdxStr !== "0") return;
+
+            const fromIdx = parseInt(fromIdxStr);
+            let toIdx = targetDropIdx;
+
+            if (dropIndicator.parentNode) {
+                dropIndicator.parentNode.removeChild(dropIndicator);
+            }
+            dropIndicator.style.display = 'none';
+
+            if (toIdx === null || isNaN(fromIdx)) return;
+
+            if (fromIdx < toIdx) {
+                toIdx--;
+            }
+
+            if (fromIdx === toIdx) return;
+
+            pushUndoState();
+
+            const movedTag = img.tags.splice(fromIdx, 1)[0];
+            img.tags.splice(toIdx, 0, movedTag);
+
+            if (backend) {
+                backend.saveImageTags(img.relative_path, img.tags.join(', '));
+            }
+
+            renderActiveTags();
+            renderGlobalTagsList();
+            renderGrid();
+        };
+
         img.tags.forEach((tag, tagIdx) => {
             const isKeyword = activeKeywords.includes(tag.toLowerCase());
             const isSearchMatch = currentQuery && tag.toLowerCase().includes(currentQuery);
 
             const chip = document.createElement('span');
             chip.className = 'tag-chip';
-            chip.title = "Ctrl+Click: Add to Keywords | Ctrl+Alt+Click: Remove from Keywords";
+            chip.draggable = true;
+            chip.dataset.index = tagIdx;
+            chip.title = "Drag to reorder | Ctrl+Click: Add to Keywords | Ctrl+Alt+Click: Remove from Keywords";
 
             if (isKeyword) {
                 chip.style.borderColor = '#10b981';
@@ -763,6 +1065,20 @@
             }
 
             chip.innerHTML = `${tag} <span title="Remove tag from image">×</span>`;
+
+            chip.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', tagIdx.toString());
+                e.dataTransfer.effectAllowed = 'move';
+                chip.style.opacity = '0.3';
+            });
+
+            chip.addEventListener('dragend', () => {
+                chip.style.opacity = '1';
+                if (dropIndicator.parentNode) {
+                    dropIndicator.parentNode.removeChild(dropIndicator);
+                }
+                dropIndicator.style.display = 'none';
+            });
 
             chip.onclick = (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.altKey) {
@@ -783,6 +1099,57 @@
         });
 
         updateTokenDisplay(img.tags.join(', '));
+    }
+
+    function sortActiveTags(method) {
+        if (selectedImageIndex === null) return;
+        const img = datasetImages[selectedImageIndex];
+        if (!img || img.tags.length <= 1) return;
+
+        pushUndoState();
+
+        const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
+        const keywordTags = [];
+        const standardTags = [];
+
+        img.tags.forEach(tag => {
+            if (activeKeywords.includes(tag.toLowerCase())) {
+                keywordTags.push(tag);
+            } else {
+                standardTags.push(tag);
+            }
+        });
+
+        if (method === 'alpha') {
+            standardTags.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'accent' }));
+        } else if (method === 'freq') {
+            const globalCounts = {};
+            datasetImages.forEach(dImg => {
+                dImg.tags.forEach(t => {
+                    const lowerT = t.toLowerCase();
+                    globalCounts[lowerT] = (globalCounts[lowerT] || 0) + 1;
+                });
+            });
+
+            standardTags.sort((a, b) => {
+                const countA = globalCounts[a.toLowerCase()] || 0;
+                const countB = globalCounts[b.toLowerCase()] || 0;
+                if (countB !== countA) {
+                    return countB - countA;
+                }
+                return a.localeCompare(b);
+            });
+        }
+
+        img.tags = [...keywordTags, ...standardTags];
+
+        if (backend) {
+            backend.saveImageTags(img.relative_path, img.tags.join(', '));
+        }
+
+        renderActiveTags();
+        renderGlobalTagsList();
+        renderGrid();
     }
 
     function addTagToSelection(newTag) {
@@ -988,28 +1355,24 @@
     document.addEventListener('keydown', function(e) {
         const activeInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input') || document.activeElement === keywordsInput;
 
-        // Ctrl+Z / Cmd+Z: Undo
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
             e.preventDefault();
             performUndo();
             return;
         }
 
-        // Delete / Backspace: Delete selected left panel tag globally
         if ((e.key === 'Delete' || e.key === 'Backspace') && !activeInput && selectedLeftTag) {
             e.preventDefault();
             deleteTagGlobally(selectedLeftTag);
             return;
         }
 
-        // Ctrl+A / Cmd+A: Select All Filtered
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !activeInput) {
             e.preventDefault();
             selectAllFiltered();
             return;
         }
 
-        // Ctrl+D / Cmd+D: Deselect All
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
             e.preventDefault();
             clearMultiSelection();
