@@ -8,6 +8,3 @@ call .\%ENV_DIR%\Scripts\activate.bat
 
 @echo start TagGUI Next
 main.py
-
-rem keep the window open
-cmd /k

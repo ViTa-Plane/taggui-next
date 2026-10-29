@@ -9,6 +9,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtGui import QIcon
 from bridge import TagGUIBridge
 
 
@@ -34,6 +35,11 @@ class MainWindow(QMainWindow):
     self.web_view.setUrl(QUrl.fromLocalFile(str(html_path)))
 
     self.setCentralWidget(self.web_view)
+
+    # Set the window icon (make sure 'icon.png' or 'icon.ico' is in your app directory)
+    icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
+    if os.path.exists(icon_path):
+      self.setWindowIcon(QIcon(icon_path))
 
 
 if __name__ == "__main__":

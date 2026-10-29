@@ -253,16 +253,8 @@
           <button onclick="browseFolder()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">Open Dataset</button>
           <button onclick="openSettingsModal()" title="Configure Interrogator Settings" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⚙️ Settings</button>
           <button onclick="backend && backend.openExternalUrl('https://github.com/ViTa-Plane/taggui-next')" title="View source on GitHub" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⭐ GitHub</button>
-          <button onclick="openHelpModal()" title="Help & Shortcuts" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; flex-shrink: 0;">[?]</button>
+          <button onclick="openHelpModal()" title="Help & Shortcuts" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; flex-shrink: 0;">[?] Help</button>
         </div>
-      </div>
-    </div>
-
-    <div style="width: 100%; max-width: 350px; position: relative; display: flex; align-items: center; background-color: #181a24; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding-right: 8px; flex-shrink: 0;">
-      <input id="filter-input" type="text" aria-label="Filter dataset" placeholder='Filter (name or tag, e.g. cat), Ctrl+F...' oninput="onFilterInputChanged()" style="flex: 1; background: transparent; border: none; padding: 6px 12px; color: #e2e8f0; font-size: 12px; font-family: monospace; outline: none;" />
-      <button id="clear-filter-btn" onclick="clearFilter()" title="Clear filter" style="background: none; border: none; color: #64748b; font-size: 14px; font-weight: bold; cursor: pointer; display: none; padding: 0 6px; align-items: center; justify-content: center;">×</button>
-      <div style="font-size: 10px; color: #94a3b8; background: #12141c; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); margin-left: 6px; pointer-events: none; white-space: nowrap;">
-        <span id="image-count">0</span> / <span id="total-count">0</span>
       </div>
     </div>
   </header>
@@ -270,6 +262,20 @@
   <div class="workspace">
     <aside class="left-panel">
       <div class="panel-header"><span>Dataset Tags</span></div>
+
+      <div style="padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; gap: 8px;">
+        <div style="position: relative; display: flex; align-items: center; background-color: #181a24; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding-right: 6px;">
+          <input id="filter-input" type="text" aria-label="Filter dataset" placeholder='Filter tags or name...' oninput="onFilterInputChanged()" style="flex: 1; background: transparent; border: none; padding: 5px 10px; color: #e2e8f0; font-size: 11px; font-family: monospace; outline: none;" />
+          <button id="clear-filter-btn" onclick="clearFilter()" title="Clear filter" style="background: none; border: none; color: #64748b; font-size: 14px; font-weight: bold; cursor: pointer; display: none; padding: 0 4px; align-items: center; justify-content: center;">×</button>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #94a3b8; font-family: monospace;">
+          <span>Images:</span>
+          <div style="background: #12141c; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08); pointer-events: none; white-space: nowrap;">
+            <span id="image-count">0</span> / <span id="total-count">0</span>
+          </div>
+        </div>
+      </div>
+
       <div id="global-tags-list" class="tags-container"></div>
     </aside>
 
