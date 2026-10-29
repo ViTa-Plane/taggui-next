@@ -603,6 +603,15 @@
         }
 
         const pathLabelEl = document.getElementById('dataset-path-label');
+        if (pathLabelEl) {
+            pathLabelEl.style.cursor = 'pointer';
+            pathLabelEl.title = "Double-click to open folder in system explorer";
+            pathLabelEl.ondblclick = () => {
+                if (backend && typeof backend.openDatasetInExplorer === 'function') {
+                    backend.openDatasetInExplorer();
+                }
+            };
+        }
 
         if (rawPath) {
             const normalized = rawPath.replace(/\\/g, '/');

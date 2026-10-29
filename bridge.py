@@ -201,3 +201,16 @@ class TagGUIBridge(QObject):
         except Exception as e:
             print(f"[Backend] Failed to restore image {relative_path}: {e}")
             return False
+
+    @Slot()
+    def openDatasetInExplorer(self):
+        try:
+            if hasattr(self, '_dataset_path') and self._dataset_path:
+                from PySide6.QtGui import QDesktopServices
+                from PySide6.QtCore import QUrl
+                path_obj = Path(self._dataset_path)
+                if path_obj.exists():
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(str(path_obj)))
+                    print(f"[Backend] Opened folder in explorer: {path_obj}")
+        except Exception as e:
+            print(f"[Backend] Failed to open dataset folder: {e}")
