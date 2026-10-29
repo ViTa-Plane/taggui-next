@@ -4,6 +4,8 @@
 
 **TagGUI-Next** is a fast, modern, and self-contained local dataset manager and tagger built with **PySide6**, **PyTorch**, and **timm**. Designed to replace unstable external APIs, it provides an intuitive HTML5/JavaScript GUI powered by `QWebChannel` for effortless tagging, bulk editing, and dataset organization for machine learning models (such as Stable Diffusion).
 
+**TagGUI-Next's** image uses local SmilingWolf / wd-eva02-large-tagger-v3  image interrogator model, best  for image datasets preparation for Pony XL v6/ Illustrious/ NoobAi and SDXL 1.0 LoRa Training
+
 ---
 
 <img src='assets/TagGUI-Next.png' alt='TagGUI-Next' width='100%'>
@@ -38,6 +40,7 @@
 - drag-and-drop image tags in the right panel to re-order them
 - Delete / Backspace,Delete selected global tag from all images
 - Escape,Clear filters and selections
+- Ctrl + Z / Ctrl + Shift +Z , Undo/Redo commands
     
 ---
 ## Usage
