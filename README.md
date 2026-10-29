@@ -30,10 +30,12 @@
 
 - Arrow Keys,Navigate through dataset images
 - Shift + Click,Multi-select range of images / add tag to selection
-- Ctrl / Cmd + Click,Toggle individual image selection
-- Ctrl / Cmd + A,Select all filtered images
-- Ctrl / Cmd + Z,Undo last change
-- Ctrl / Cmd + Shift + Z,Redo last change
+- Ctrl + Click on a tag,adds keyword to the keyword list
+- Ctrl + Alt + Click on a tag, removes keyword to the keyword list
+- Shift + Click on a global tag (the left tag list), adds the tag to the image tags
+- Shift+ Alt + Click on a global tag (the left tag list), removes the tag from the image tags
+- double click on a tag opens an edit tag window.
+- drag-and-drop image tags in the right panel to re-order them
 - Delete / Backspace,Delete selected global tag from all images
 - Escape,Clear filters and selections
     
@@ -50,12 +52,20 @@ files.
 In addition to manual tagging, you can automatically generate captions or tags
 for your images inside ***TagGUI-Next***.
 
+The image interrogator is hardcoded to SmilingWolf/wd-eva02-large-tagger-v3 model,
+It will be downloaded automatically in the first use (about 2GB, be patient and wait it to be instaled )
+
 GPU generation requires a compatible NVIDIA GPU, and CPU generation is also
-supported as a fallback.
+supported as a fallback. If you have supported CUDA GPU and the GPU acceleration don't work, your installed pytorch is CPU only version.
 
 To use the feature, select the images you want to caption in the image list,
 then click the AutoTag button.
 
+To change the interrogator settings click the settings button 
+>
+<img src='assets/TagGUI-Next_settings.png' alt='TagGUI-Next settings' width='100%'>
+
+---
 ## Installation & Setup
 
 **Clone the repository:**
