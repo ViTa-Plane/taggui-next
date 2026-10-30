@@ -22,6 +22,51 @@
     ::-webkit-scrollbar-thumb { background: #2a2d3d; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #3d4259; }
 
+    /* Hide native number spinner arrows to prevent visual glitches */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+
+    /* Custom Styled Checkbox */
+    .custom-checkbox {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background-color: #181a24;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s, border-color 0.15s;
+      position: relative;
+    }
+    .custom-checkbox:checked {
+      background-color: #6366f1;
+      border-color: #6366f1;
+    }
+    .custom-checkbox:checked::after {
+      content: "";
+      width: 4px;
+      height: 8px;
+      border: solid white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+      position: absolute;
+      top: 1px;
+    }
+    .custom-checkbox:hover {
+      border-color: #6366f1;
+    }
+
     header {
       height: 52px;
       background-color: #12141c;
@@ -216,16 +261,19 @@
       margin-top: 12px;
     }
 
-    /* Modal Overlay Styles */
+    /* Modal Overlay Styles with GPU layer promotion to prevent repaint glitches */
     .modal-overlay {
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(4px);
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
       display: none;
       align-items: center;
       justify-content: center;
       z-index: 1000;
+      will-change: opacity;
+      transform: translateZ(0); /* Forces GPU composition layer */
     }
     .modal-content {
       background-color: #12141c;
@@ -237,6 +285,37 @@
       padding: 20px;
       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
     }
+    /* Completely disables pointer processing on background elements when modal is active */
+    body.modal-open .workspace,
+    body.modal-open header {
+      pointer-events: none !important;
+    }
+    /* Custom Range Slider Styling */
+  .custom-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #181a24;
+    border-radius: 3px;
+    outline: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .custom-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #6366f1;
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.1s;
+  }
+  .custom-slider::-webkit-slider-thumb:hover {
+    background: #818cf8;
+    transform: scale(1.15);
+  }
+
   </style>
 </head>
 <body>
@@ -250,10 +329,10 @@
         </h1>
         <div style="display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%;">
           <p id="dataset-path-label" title="Dataset Path" style="font-size: 10px; color: #94a3b8; font-family: monospace; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;">Loading...</p>
-          <button onclick="browseFolder()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">Open Dataset</button>
-          <button onclick="openSettingsModal()" title="Configure Interrogator Settings" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⚙️ Settings</button>
-          <button onclick="backend && backend.openExternalUrl('https://github.com/ViTa-Plane/taggui-next')" title="View source on GitHub" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⭐ GitHub</button>
-          <button onclick="openHelpModal()" title="Help & Shortcuts" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; flex-shrink: 0;">[?] Help</button>
+          <button id="open-dataset-btn" title="Open Dataset Directory" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">Open Dataset</button>
+          <button id="settings-btn" title="Configure Interrogator Settings" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⚙️ Settings</button>
+          <button id="github-btn" title="View source on GitHub" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⭐ GitHub</button>
+          <button id="help-btn" title="Help & Shortcuts" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; flex-shrink: 0;">[?] Help</button>
         </div>
       </div>
     </div>
@@ -265,8 +344,8 @@
 
       <div style="padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; gap: 8px;">
         <div style="position: relative; display: flex; align-items: center; background-color: #181a24; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding-right: 6px;">
-          <input id="filter-input" type="text" aria-label="Filter dataset" placeholder='Filter tags or name...' oninput="onFilterInputChanged()" style="flex: 1; background: transparent; border: none; padding: 5px 10px; color: #e2e8f0; font-size: 11px; font-family: monospace; outline: none;" />
-          <button id="clear-filter-btn" onclick="clearFilter()" title="Clear filter" style="background: none; border: none; color: #64748b; font-size: 14px; font-weight: bold; cursor: pointer; display: none; padding: 0 4px; align-items: center; justify-content: center;">×</button>
+          <input id="filter-input" type="text" aria-label="Filter dataset" placeholder='Filter tags or name...' style="flex: 1; background: transparent; border: none; padding: 5px 10px; color: #e2e8f0; font-size: 11px; font-family: monospace; outline: none;" />
+          <button id="clear-filter-btn" title="Clear filter" style="background: none; border: none; color: #64748b; font-size: 14px; font-weight: bold; cursor: pointer; display: none; padding: 0 4px; align-items: center; justify-content: center;">×</button>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #94a3b8; font-family: monospace;">
           <span>Images:</span>
@@ -284,8 +363,8 @@
         <span id="selection-status">Grid View (Arrow keys to navigate, Shift+Click for multi-select)</span>
         <div style="display: flex; gap: 8px; align-items: center;">
           <span id="selection-counter" style="font-family: monospace; font-size: 11px; color: #38bdf8; margin-right: 8px;">0 / 0 selected</span>
-          <button onclick="selectAllFiltered()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Select All</button>
-          <button onclick="clearMultiSelection()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Clear Selection</button>
+          <button id="select-all-btn" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Select All</button>
+          <button id="clear-selection-btn" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Clear Selection</button>
         </div>
       </div>
       <div id="image-grid" class="image-grid"></div>
@@ -307,8 +386,9 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
           <span style="font-size: 9px; color: #64748b; font-family: monospace;">Prepends & sorts</span>
           <div style="display: flex; gap: 6px;">
-            <button onclick="applyKeywordsToSelectionBtn()" title="Apply keywords to current selection (Enter)" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Apply</button>
-            <button onclick="applyKeywordsToAll()" title="Apply keywords to all pictures in dataset" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Apply to All</button>
+            <button id="move-front-btn" title="Move matching existing keywords to the front of the tag list" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Move to Front</button>
+            <button id="apply-keywords-btn" title="Apply keywords to current selection (Enter)" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Apply</button>
+            <button id="apply-all-keywords-btn" title="Apply keywords to all pictures in dataset" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Apply to All</button>
           </div>
         </div>
       </div>
@@ -317,7 +397,7 @@
         <div>
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <span id="active-tag-count" style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase;">Tags (0)</span>
-            <button onclick="triggerAutoTag()" title="Generate tags using local PyTorch Tagger" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none; color: white; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 4px; cursor: pointer;">✨ AutoTag</button>
+            <button id="autotag-btn" title="Generate tags using local PyTorch Tagger" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none; color: white; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 4px; cursor: pointer;">✨ AutoTag</button>
           </div>
           <div id="active-tags-container" class="tag-chips"></div>
         </div>
@@ -335,8 +415,8 @@
         <div class="token-box">
           <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">Sort Tags</div>
           <div style="display: flex; gap: 6px;">
-            <button onclick="sortActiveTags('alpha')" title="Sort active tags alphabetically (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort A-Z</button>
-            <button onclick="sortActiveTags('freq')" title="Sort active tags by frequency in dataset (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort by Frequency</button>
+            <button id="sort-alpha-btn" title="Sort active tags alphabetically (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort A-Z</button>
+            <button id="sort-freq-btn" title="Sort active tags by frequency in dataset (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort by Frequency</button>
           </div>
         </div>
       </div>
@@ -348,25 +428,37 @@
     <div class="modal-content">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <h2 style="font-size: 13px; font-weight: bold; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Interrogator Settings</h2>
-        <button onclick="closeSettingsModal()" style="background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">×</button>
+        <button id="close-settings-x-btn" style="background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">×</button>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <div>
           <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Interrogator Model ([Installed] marked)</label>
-          <select id="setting-model-name" class="text-input" style="background-color: #181a24; color: #e2e8f0; cursor: pointer;" onchange="onModelSelectedChange()">
+          <select id="setting-model-name" class="text-input" style="background-color: #181a24; color: #e2e8f0; cursor: pointer;">
             <!-- Populated dynamically -->
           </select>
         </div>
 
         <div id="group-tagger-settings">
           <div>
-            <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">General Threshold (0.0 - 1.0)</label>
-            <input id="setting-general-threshold" type="number" step="0.05" min="0" max="1" class="text-input" />
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label style="font-size: 11px; color: #94a3b8;">General Threshold</label>
+              <span id="val-general-threshold" style="font-size: 11px; font-family: monospace; color: #38bdf8;">0.35</span>
+            </div>
+            <input id="setting-general-threshold" type="range" min="0" max="1" step="0.01" class="custom-slider" />
+            <label style="font-size: 10px; color: #cbd5e1; display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
+              <input id="setting-general-mcut" type="checkbox" class="custom-checkbox" /> Use MCut threshold for General tags
+            </label>
           </div>
-          <div style="margin-top: 8px;">
-            <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Character Threshold (0.0 - 1.0)</label>
-            <input id="setting-character-threshold" type="number" step="0.05" min="0" max="1" class="text-input" />
+          <div style="margin-top: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label style="font-size: 11px; color: #94a3b8;">Character Threshold</label>
+              <span id="val-character-threshold" style="font-size: 11px; font-family: monospace; color: #38bdf8;">0.85</span>
+            </div>
+            <input id="setting-character-threshold" type="range" min="0" max="1" step="0.01" class="custom-slider" />
+            <label style="font-size: 10px; color: #cbd5e1; display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
+              <input id="setting-character-mcut" type="checkbox" class="custom-checkbox" /> Use MCut threshold for Character tags
+            </label>
           </div>
         </div>
 
@@ -384,9 +476,13 @@
         </div>
       </div>
 
-      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
-        <button onclick="closeSettingsModal()" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 11px; padding: 6px 12px; border-radius: 6px; cursor: pointer;">Cancel</button>
-        <button onclick="saveSettingsModal()" style="background: #6366f1; border: none; color: white; font-size: 11px; font-weight: bold; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Save Settings</button>
+      <!-- settings-modal-->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+        <button id="reset-settings-btn" style="background: #181a24; border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; font-size: 11px; padding: 6px 12px; border-radius: 6px; cursor: pointer;">Reset Defaults</button>
+        <div style="display: flex; gap: 8px;">
+          <button id="close-settings-btn" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 11px; padding: 6px 12px; border-radius: 6px; cursor: pointer;">Cancel</button>
+          <button id="save-settings-btn" style="background: #6366f1; border: none; color: white; font-size: 11px; font-weight: bold; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Save Settings</button>
+        </div>
       </div>
     </div>
   </div>
@@ -396,7 +492,7 @@
     <div class="modal-content">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <h2 style="font-size: 13px; font-weight: bold; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Help & Keyboard Shortcuts</h2>
-        <button onclick="closeHelpModal()" style="background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">×</button>
+        <button id="close-help-x-btn" style="background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">×</button>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 14px; font-size: 11px; color: #cbd5e1; line-height: 1.5;">
@@ -429,7 +525,7 @@
       </div>
 
       <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
-        <button onclick="closeHelpModal()" style="background: #6366f1; border: none; color: white; font-size: 11px; font-weight: bold; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Got It</button>
+        <button id="close-help-btn" style="background: #6366f1; border: none; color: white; font-size: 11px; font-weight: bold; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Got It</button>
       </div>
     </div>
   </div>
@@ -455,11 +551,12 @@
         model_name: "SmilingWolf/wd-eva02-large-tagger-v3",
         general_threshold: 0.35,
         character_threshold: 0.85,
+        general_mcut_enabled: false,
+        character_mcut_enabled: false,
         tag_strategy: "add",
         task_command: "<CAPTION>"
     };
 
-    // --- Helper: Deduplicated & Unified Selected Indices ---
     function getSelectedIndices() {
         const set = new Set(multiSelectedIndices);
         if (selectedImageIndex !== null) {
@@ -468,8 +565,8 @@
         return Array.from(set).filter(idx => idx !== null && idx >= 0);
     }
 
-    // --- Global Settings Modal Handlers ---
     function openSettingsModal() {
+        document.body.classList.add('modal-open');
         if (!backend) return;
         backend.getAvailableInterrogators(function(res) {
             try {
@@ -485,8 +582,26 @@
                 } catch(e) {}
 
                 document.getElementById('setting-model-name').value = currentSettingsData.model_name || "SmilingWolf/wd-eva02-large-tagger-v3";
-                document.getElementById('setting-general-threshold').value = currentSettingsData.general_threshold ?? 0.35;
-                document.getElementById('setting-character-threshold').value = currentSettingsData.character_threshold ?? 0.85;
+
+                // Ensure saved threshold values are properly applied to sliders and text labels on load
+                const genVal = currentSettingsData.general_threshold ?? 0.35;
+                const charVal = currentSettingsData.character_threshold ?? 0.85;
+
+                const genSlider = document.getElementById('setting-general-threshold');
+                const charSlider = document.getElementById('setting-character-threshold');
+
+                genSlider.value = genVal;
+                document.getElementById('setting-general-threshold').addEventListener('input', function() {
+                    document.getElementById('val-general-threshold').innerText = Number(this.value).toFixed(2);
+                });
+
+                charSlider.value = charVal;
+                document.getElementById('setting-character-threshold').addEventListener('input', function() {
+                    document.getElementById('val-character-threshold').innerText = Number(this.value).toFixed(2);
+                });
+
+                document.getElementById('setting-general-mcut').checked = !!currentSettingsData.general_mcut_enabled;
+                document.getElementById('setting-character-mcut').checked = !!currentSettingsData.character_mcut_enabled;
                 document.getElementById('setting-tag-strategy').value = currentSettingsData.tag_strategy ?? "add";
 
                 onModelSelectedChange();
@@ -552,17 +667,22 @@
     }
 
     function closeSettingsModal() {
+        document.body.classList.remove('modal-open'); // Re-enables background mouse tracking
         document.getElementById('settings-modal').style.display = 'none';
     }
 
     function saveSettingsModal() {
         const genVal = parseFloat(document.getElementById('setting-general-threshold').value);
         const charVal = parseFloat(document.getElementById('setting-character-threshold').value);
+        const genMcut = document.getElementById('setting-general-mcut').checked;
+        const charMcut = document.getElementById('setting-character-mcut').checked;
         const stratVal = document.getElementById('setting-tag-strategy').value;
 
         currentSettingsData.model_name = document.getElementById('setting-model-name').value;
         currentSettingsData.general_threshold = isNaN(genVal) ? 0.35 : genVal;
         currentSettingsData.character_threshold = isNaN(charVal) ? 0.85 : charVal;
+        currentSettingsData.general_mcut_enabled = genMcut;
+        currentSettingsData.character_mcut_enabled = charMcut;
         currentSettingsData.tag_strategy = stratVal;
 
         const taskCmdSelect = document.getElementById('setting-task-command');
@@ -578,12 +698,28 @@
         closeSettingsModal();
     }
 
-    // --- Global Help Modal Handlers ---
+    function resetSettingsToDefaults() {
+        document.getElementById('setting-model-name').value = "SmilingWolf/wd-eva02-large-tagger-v3";
+        onModelSelectedChange();
+
+        document.getElementById('setting-general-threshold').value = 0.35;
+        document.getElementById('val-general-threshold').innerText = "0.35";
+
+        document.getElementById('setting-character-threshold').value = 0.85;
+        document.getElementById('val-character-threshold').innerText = "0.85";
+
+        document.getElementById('setting-general-mcut').checked = false;
+        document.getElementById('setting-character-mcut').checked = false;
+        document.getElementById('setting-tag-strategy').value = "add";
+    }
+
     function openHelpModal() {
+        document.body.classList.add('modal-open'); // Re-enables background mouse tracking
         document.getElementById('help-modal').style.display = 'flex';
     }
 
     function closeHelpModal() {
+        document.body.classList.remove('modal-open'); // Re-enables background mouse tracking
         document.getElementById('help-modal').style.display = 'none';
     }
 
@@ -767,6 +903,7 @@
         }
     }
 
+    // Connect via QWebChannel first, then setup all event listeners and fetch dataset
     new QWebChannel(qt.webChannelTransport, function(channel) {
         backend = channel.objects.backend;
         keywordsInput = document.getElementById('keywords-input');
@@ -790,6 +927,39 @@
                 }
             });
         }
+
+        // Programmatically bind UI header buttons to avoid inline event handlers
+        document.getElementById('open-dataset-btn').addEventListener('click', browseFolder);
+        document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
+        document.getElementById('github-btn').addEventListener('click', () => {
+            if (backend) backend.openExternalUrl('https://github.com/ViTa-Plane/taggui-next');
+        });
+        document.getElementById('help-btn').addEventListener('click', openHelpModal);
+
+        document.getElementById('clear-filter-btn').addEventListener('click', clearFilter);
+        document.getElementById('select-all-btn').addEventListener('click', selectAllFiltered);
+        document.getElementById('clear-selection-btn').addEventListener('click', clearMultiSelection);
+
+        document.getElementById('move-front-btn').addEventListener('click', moveKeywordsToFrontBtn);
+        document.getElementById('apply-keywords-btn').addEventListener('click', applyKeywordsToSelectionBtn);
+        document.getElementById('apply-all-keywords-btn').addEventListener('click', applyKeywordsToAll);
+        document.getElementById('autotag-btn').addEventListener('click', triggerAutoTag);
+
+        document.getElementById('sort-alpha-btn').addEventListener('click', () => sortActiveTags('alpha'));
+        document.getElementById('sort-freq-btn').addEventListener('click', () => sortActiveTags('freq'));
+
+        document.getElementById('close-settings-x-btn').addEventListener('click', closeSettingsModal);
+        document.getElementById('close-settings-btn').addEventListener('click', closeSettingsModal);
+        document.getElementById('save-settings-btn').addEventListener('click', saveSettingsModal);
+        document.getElementById('reset-settings-btn').addEventListener('click', resetSettingsToDefaults);
+
+        document.getElementById('close-help-x-btn').addEventListener('click', closeHelpModal);
+        document.getElementById('close-help-btn').addEventListener('click', closeHelpModal);
+
+        document.getElementById('setting-model-name').addEventListener('change', onModelSelectedChange);
+        document.getElementById('filter-input').addEventListener('input', onFilterInputChanged);
+
+        // Fetch dataset upon successful channel connection
         fetchDataset();
     });
 
@@ -883,11 +1053,21 @@
             card.dataset.index = originalIdx;
 
             card.innerHTML = `
-                <img src="${img.url}" loading="lazy" onerror="this.style.display='none'" />
+                <img src="${img.url}" loading="lazy" />
                 <div class="badge-filename">${img.filename}</div>
                 <div class="badge-tagged" style="display: ${hasTags ? 'block' : 'none'};">TAGGED</div>
-                <div class="badge-delete" title="Delete image & tags" onclick="promptDeleteImage(event, ${originalIdx})">×</div>
+                <div class="badge-delete" title="Delete image & tags">×</div>
             `;
+
+            const imgElement = card.querySelector('img');
+            imgElement.addEventListener('error', () => {
+                imgElement.style.display = 'none';
+            });
+
+            const deleteBadge = card.querySelector('.badge-delete');
+            deleteBadge.addEventListener('click', (e) => {
+                promptDeleteImage(e, originalIdx);
+            });
 
             card.onclick = (e) => {
                 if (e.shiftKey && lastClickedIndex !== null) {
@@ -943,11 +1123,6 @@
         const selectedCount = getSelectedIndices().length;
         document.getElementById('selection-counter').innerText = `${selectedCount} / ${filteredImages.length} selected`;
     }
-
-    // function clearMultiSelection() {
-    //     multiSelectedIndices.clear();
-    //     updateGridSelectionUI();
-    // }
 
     function clearMultiSelection() {
         multiSelectedIndices.clear();
@@ -1342,6 +1517,46 @@
         }
     }
 
+    function moveKeywordsToFrontBtn() {
+        if (!keywordsInput) return;
+        const val = keywordsInput.value.trim();
+        if (val && selectedImageIndex !== null) {
+            moveKeywordsToFrontForSelection(val);
+        } else {
+            alert("Please select an image and enter keywords first.");
+        }
+    }
+
+    function moveKeywordsToFrontForSelection(keywordsStr) {
+        if (!keywordsStr) return;
+        const rawKeywords = keywordsStr.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0);
+        if (rawKeywords.length === 0) return;
+
+        pushUndoState();
+        const targets = getSelectedIndices();
+        const updates = {};
+
+        targets.forEach(idx => {
+            const img = datasetImages[idx];
+            const imgTagsLower = img.tags.map(t => t.toLowerCase());
+            const presentKeywords = rawKeywords.filter(kw => imgTagsLower.includes(kw));
+
+            if (presentKeywords.length > 0) {
+                const remainingTags = img.tags.filter(t => !presentKeywords.includes(t.toLowerCase()));
+                img.tags = cleanImageTags([...presentKeywords, ...remainingTags]);
+                updates[img.relative_path] = img.tags.join(', ');
+            }
+        });
+
+        if (backend && Object.keys(updates).length > 0) {
+            backend.saveBatchImageTags(JSON.stringify(updates));
+        }
+
+        renderActiveTags();
+        renderGlobalTagsList();
+        renderGrid();
+    }
+
     function updateTokenDisplay(tagsString) {
         if (!backend) return;
         backend.estimateTokens(tagsString, function(count) {
@@ -1501,7 +1716,6 @@
     document.addEventListener('keydown', function(e) {
         const activeInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input') || document.activeElement === keywordsInput;
 
-        // Add Ctrl+D / Cmd+D to deselect all images
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && !activeInput) {
             e.preventDefault();
             multiSelectedIndices.clear();
@@ -1509,7 +1723,7 @@
             document.getElementById('selected-filename').innerText = "No image selected";
             document.getElementById('active-tags-container').innerHTML = '';
             document.getElementById('active-tag-count').innerText = "Tags (0)";
-            updateTokenDisplay(""); // Reset token counter and progress bar to 0
+            updateTokenDisplay("");
             updateGridSelectionUI();
             return;
         }
