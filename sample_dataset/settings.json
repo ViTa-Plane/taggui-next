@@ -1,5 +1,5 @@
 {
-  "keywords": "",
+  "keywords": "barefoot, stairs",
   "model_name": "microsoft/Florence-2-base",
   "general_threshold": 0.35,
   "character_threshold": 0.85,
