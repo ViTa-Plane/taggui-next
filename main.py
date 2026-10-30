@@ -37,7 +37,7 @@ class MainWindow(QMainWindow):
     self.setCentralWidget(self.web_view)
 
     # Set the window icon (make sure 'icon.png' or 'icon.ico' is in your app directory)
-    icon_path = os.path.join(os.path.dirname(__file__), "icon.png")
+    icon_path = os.path.join(os.path.dirname(__file__), "assets/icon.png")
     if os.path.exists(icon_path):
       self.setWindowIcon(QIcon(icon_path))
 
