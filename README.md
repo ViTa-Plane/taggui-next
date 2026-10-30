@@ -113,7 +113,7 @@ If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter c
 
 ### 1. Florence-2 (`microsoft/Florence-2-...`)
 
-* **Compatibility Status**: Stable (with my existing flags).
+* **Compatibility Status**: Stable (with flags).
 * **Potential Gotchas**: Florence-2 uses custom architecture code (`code_florence_2.py`) loaded via `trust_remote_code=True`. On post-v4.50 packages, it can throw flash-attention or cache mismatch warnings if not explicitly told to use eager execution.
 * **Current Defense**: my code already passing `attn_implementation="eager"` and `use_cache=False`, which completely shields it from breaking changes.
 
@@ -141,8 +141,7 @@ Since we are locked to `transformers v4.57.6`, any *new* vision-language or caus
 ### My conclusion:
 - use  WD Tagger models for speed and stability for danbooru / e621 style tags used in SDXL models
 - use BLIP and Florence-2 for natural language prompts for FLUX/Qwen models.
-- it's a lot of work to keep the old models working, but I want all functionality of the legacy [TagGUI](https://github.com/jhc13/taggui)  and [BooruDatasetTagManager](https://github.com/starik222/BooruDatasetTagManager), both were very useful in the past, but `<rant>` **the outdated GUI and the random infuriating interface/workflow choices, that make the user experience very frustrating** `</rant>`. C'mon guys, Do you ever used your own software in real-life workflow? >.<
-- vibe-coding is very frustrating, AI is a fast-typing idiot that needs constant babysitting and guidance.
+- it's a lot of work and monkey-patching to keep the old models working
 - keep it simple...stupid
 
 ### To do list:
