@@ -1,15 +1,22 @@
+import os
+import sys
 import json
+import gc
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+
 from PIL import Image
+import numpy as np
+import torch
+
 from PySide6.QtCore import QObject, Slot, Signal, Property
 from PySide6.QtWidgets import QFileDialog
 from huggingface_hub.constants import HF_HUB_CACHE
-from concurrent.futures import ThreadPoolExecutor
-import os
-import gc
-import torch
-import numpy as np
 
+
+# ==============================================================================
+# MAIN BRIDGE CLASS
+# ==============================================================================
 
 class TagGUIBridge(QObject):
     pathChanged = Signal(str)
@@ -43,8 +50,10 @@ class TagGUIBridge(QObject):
     def _save_last_path_config(self):
         try:
             config_path = Path.cwd() / "last_dataset.json"
-            config_path.write_text(json.dumps({"last_path": str(self._dataset_path.resolve())}, indent=2),
-                                   encoding="utf-8")
+            config_path.write_text(
+                json.dumps({"last_path": str(self._dataset_path.resolve())}, indent=2),
+                encoding="utf-8"
+            )
         except Exception as e:
             print(f"[Backend] Failed to save last_dataset.json: {e}")
 
@@ -136,9 +145,7 @@ class TagGUIBridge(QObject):
             ("SmilingWolf/wd-eva02-large-tagger-v3", 0.52),
         ]
 
-        blip_names = [
-            "Salesforce/blip-image-captioning-large",
-        ]
+        blip_names = ["Salesforce/blip-image-captioning-large"]
 
         blip2_names = [
             "Salesforce/blip2-opt-2.7b",
@@ -498,38 +505,50 @@ class TagGUIBridge(QObject):
                 if "blip" in model_name.lower() and "blip2" not in model_name.lower():
                     from transformers import BlipProcessor, BlipForConditionalGeneration
                     processor = BlipProcessor.from_pretrained(model_name, trust_remote_code=True)
-                    model = BlipForConditionalGeneration.from_pretrained(model_name, torch_dtype=dtype,
-                                                                         trust_remote_code=True).to(device)
+                    model = BlipForConditionalGeneration.from_pretrained(
+                        model_name, torch_dtype=dtype, trust_remote_code=True
+                    ).to(device)
                 else:
                     from transformers import AutoProcessor
                     processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
 
                     if "blip2" in model_name.lower():
                         from transformers import Blip2ForConditionalGeneration
-                        model = Blip2ForConditionalGeneration.from_pretrained(model_name, torch_dtype=dtype,
-                                                                              trust_remote_code=True).to(device)
+                        model = Blip2ForConditionalGeneration.from_pretrained(
+                            model_name, torch_dtype=dtype, trust_remote_code=True
+                        ).to(device)
+
                     elif "florence" in model_name.lower():
-                        from transformers import AutoModelForImageTextToText
-                        model = AutoModelForImageTextToText.from_pretrained(model_name, torch_dtype=dtype,
-                                                                            trust_remote_code=True).to(device)
+                        from transformers import AutoModelForCausalLM
+
+                        model = AutoModelForCausalLM.from_pretrained(
+                            model_name,
+                            dtype=dtype,
+                            trust_remote_code=True,
+                            attn_implementation="eager"
+                        ).to(device)
+
                     elif "moondream" in model_name.lower():
                         from transformers import AutoModelForCausalLM
-                        model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True,
-                                                                     revision="2024-05-08", torch_dtype=dtype).to(
-                            device)
+                        model = AutoModelForCausalLM.from_pretrained(
+                            model_name, trust_remote_code=True, revision="2024-05-08", torch_dtype=dtype
+                        ).to(device)
                     else:
                         try:
                             from transformers import AutoModelForVision2Seq
-                            model = AutoModelForVision2Seq.from_pretrained(model_name, torch_dtype=dtype,
-                                                                           trust_remote_code=True).to(device)
+                            model = AutoModelForVision2Seq.from_pretrained(
+                                model_name, torch_dtype=dtype, trust_remote_code=True
+                            ).to(device)
                         except ImportError:
                             from transformers import AutoModelForCausalLM
-                            model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=dtype,
-                                                                         trust_remote_code=True).to(device)
+                            model = AutoModelForCausalLM.from_pretrained(
+                                model_name, torch_dtype=dtype, trust_remote_code=True
+                            ).to(device)
             else:
                 import timm
                 import csv
                 from huggingface_hub import hf_hub_download
+
                 print(f"[Backend] Loading tagger model for batch: {model_name}...")
                 hf_model_str = f"hf-hub:{model_name}"
                 tagger_model = timm.create_model(hf_model_str, pretrained=True).eval().to(device)
@@ -547,8 +566,9 @@ class TagGUIBridge(QObject):
 
                 try:
                     if is_vlm:
-                        with Image.open(img_path) as img:
-                            image = img.convert("RGB")
+                        with Image.open(img_path) as raw_img:
+                            image = raw_img.convert("RGB")
+
                         generated_text = ""
                         with torch.no_grad():
                             if "blip" in model_name.lower() and "blip2" not in model_name.lower():
@@ -556,26 +576,45 @@ class TagGUIBridge(QObject):
                                 generated_ids = model.generate(**inputs, max_new_tokens=100, num_beams=3)
                                 generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[
                                     0].strip()
+
+
                             elif "florence" in model_name.lower():
                                 prompt = task_command if task_command else "<CAPTION>"
-                                inputs = processor(text=prompt, images=image, return_tensors="pt").to(device, dtype)
-                                generated_ids = model.generate(input_ids=inputs["input_ids"],
-                                                               pixel_values=inputs["pixel_values"], max_new_tokens=1024,
-                                                               num_beams=3)
-                                generated_text = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
-                                generated_text = \
-                                    processor.post_process_generation(generated_text, task=prompt,
-                                                                      image_size=image.size)[
-                                        prompt]
+                                fl_image = image.resize((768, 768), Image.Resampling.LANCZOS)
+                                inputs = processor(text=prompt, images=fl_image, return_tensors="pt").to(device, dtype)
+                                # Safety guard against malformed images returning None tensors
+                                if not inputs or "pixel_values" in inputs and inputs["pixel_values"] is None:
+                                    print(f"[Backend] Skipping {rel_path}: Processor failed to extract pixel values.")
+                                    continue
+                                generated_ids = model.generate(
+                                    input_ids=inputs["input_ids"],
+                                    pixel_values=inputs["pixel_values"],
+                                    max_new_tokens=1024,
+                                    num_beams=3,
+                                    use_cache = False  # <--- Disables incompatible cache lookups on modern transformers
+                                )
+                                raw_text = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+                                parsed = processor.post_process_generation(
+                                    raw_text, task=prompt, image_size=(768, 768)
+                                )
+                                if isinstance(parsed, dict) and prompt in parsed:
+                                    generated_text = parsed[prompt]
+                                elif isinstance(parsed, dict):
+                                    generated_text = list(parsed.values())[0]
+                                else:
+                                    generated_text = str(parsed)
+
                             elif "moondream" in model_name.lower():
                                 enc_image = model.encode_image(image)
                                 generated_text = model.answer_question(enc_image, "Describe this image concisely.",
                                                                        processor)
+
                             else:
                                 inputs = processor(images=image, return_tensors="pt").to(device, dtype)
                                 generated_ids = model.generate(**inputs, max_new_tokens=100)
                                 generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[
                                     0].strip()
+
                         tags_str = generated_text
                     else:
                         with Image.open(img_path) as img:
@@ -623,6 +662,7 @@ class TagGUIBridge(QObject):
                         results[rel_path] = tags_str
                         print(
                             f"[Backend] ({i + 1}/{len(paths)}) Processed {img_path.name} using {model_name}: {tags_str}")
+
                 except Exception as img_err:
                     print(f"[Backend] Error processing {rel_path}: {img_err}")
 
