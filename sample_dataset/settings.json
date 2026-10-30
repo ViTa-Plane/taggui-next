@@ -1,0 +1,8 @@
+{
+  "keywords": "",
+  "model_name": "Salesforce/blip2-opt-2.7b",
+  "general_threshold": 0.35,
+  "character_threshold": 0.85,
+  "tag_strategy": "add",
+  "task_command": "<CAPTION>"
+}

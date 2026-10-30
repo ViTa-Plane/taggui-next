@@ -183,3 +183,4 @@ cython_debug/
 /.idea
 last_dataset.json
 /test
+/sample_dataset/.taggui_thumbs
