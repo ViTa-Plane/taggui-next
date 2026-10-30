@@ -440,25 +440,27 @@
         </div>
 
         <div id="group-tagger-settings">
-          <div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <label style="font-size: 11px; color: #94a3b8;">General Threshold</label>
-              <span id="val-general-threshold" style="font-size: 11px; font-family: monospace; color: #38bdf8;">0.35</span>
+          <div id="threshold-controls-group">
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label style="font-size: 11px; color: #94a3b8;">General Threshold</label>
+                <span id="val-general-threshold" style="font-size: 11px; font-family: monospace; color: #38bdf8;">0.35</span>
+              </div>
+              <input id="setting-general-threshold" type="range" min="0" max="1" step="0.01" class="custom-slider" />
+              <label style="font-size: 10px; color: #cbd5e1; display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
+                <input id="setting-general-mcut" type="checkbox" class="custom-checkbox" /> Use MCut threshold for General tags
+              </label>
             </div>
-            <input id="setting-general-threshold" type="range" min="0" max="1" step="0.01" class="custom-slider" />
-            <label style="font-size: 10px; color: #cbd5e1; display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
-              <input id="setting-general-mcut" type="checkbox" class="custom-checkbox" /> Use MCut threshold for General tags
-            </label>
-          </div>
-          <div style="margin-top: 14px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <label style="font-size: 11px; color: #94a3b8;">Character Threshold</label>
-              <span id="val-character-threshold" style="font-size: 11px; font-family: monospace; color: #38bdf8;">0.85</span>
+            <div style="margin-top: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label style="font-size: 11px; color: #94a3b8;">Character Threshold</label>
+                <span id="val-character-threshold" style="font-size: 11px; font-family: monospace; color: #38bdf8;">0.85</span>
+              </div>
+              <input id="setting-character-threshold" type="range" min="0" max="1" step="0.01" class="custom-slider" />
+              <label style="font-size: 10px; color: #cbd5e1; display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
+                <input id="setting-character-mcut" type="checkbox" class="custom-checkbox" /> Use MCut threshold for Character tags
+              </label>
             </div>
-            <input id="setting-character-threshold" type="range" min="0" max="1" step="0.01" class="custom-slider" />
-            <label style="font-size: 10px; color: #cbd5e1; display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
-              <input id="setting-character-mcut" type="checkbox" class="custom-checkbox" /> Use MCut threshold for Character tags
-            </label>
           </div>
         </div>
 
@@ -642,12 +644,17 @@
         const selectedId = document.getElementById('setting-model-name').value;
         const modelInfo = availableInterrogators.find(m => m.id === selectedId);
 
-        const taggerGroup = document.getElementById('group-tagger-settings');
+        const thresholdControls = document.getElementById('threshold-controls-group');
         const captionerGroup = document.getElementById('group-captioner-settings');
         const taskCmdSelect = document.getElementById('setting-task-command');
 
+        const isTagger = modelInfo && modelInfo.category === 'tagger';
+
+        if (thresholdControls) {
+            thresholdControls.style.display = isTagger ? 'block' : 'none';
+        }
+
         if (modelInfo && (modelInfo.category === 'florence2' || modelInfo.category === 'moondream')) {
-            taggerGroup.style.display = 'none';
             captionerGroup.style.display = 'block';
 
             taskCmdSelect.innerHTML = '';
@@ -661,7 +668,6 @@
                 taskCmdSelect.value = currentSettingsData.task_command;
             }
         } else {
-            taggerGroup.style.display = 'block';
             captionerGroup.style.display = 'none';
         }
     }
