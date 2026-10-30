@@ -89,6 +89,63 @@ If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter c
 - run install.bat to automatically set the python_embeded and to  install the requirements (about 3.72GB)
 - start the TagGUI-Next with run.bat
 - on first use, the auto-tagger will download the default interrogator [(wd-eva02-large-tagger-v3)](https://huggingface.co/SmilingWolf/wd-eva02-large-tagger-v3) to the local huggingface hub directory (about 1.2GB)
-- it's tested on Python 3.13.15 ,torch 2.14.1+cu130, torchvision 0.29.1+cu130
-    
+- tested in Python 3.13.15 enviorement,
+    ```
+    Package            Version
+    ------------------ ------------
+    huggingface_hub    0.36.2
+    Pygments           2.21.0
+    PySide6            6.12.0
+    PySide6_Addons     6.12.0
+    PySide6_Essentials 6.12.0
+    PySide6_Pdf        6.12.0.140
+    PySide6_WebEngine  6.12.0.140
+    timm               1.0.30
+    tokenizers         0.22.2
+    torch              2.14.1+cu130
+    torchvision        0.29.1+cu130
+    tqdm               4.70.1
+    transformers       4.57.6
+    ```
+## Models compatibility 
 
+**TagGUI-Next** uses  **Transformers v4.57.6** . Because v4.5x sits firmly past the major structural overhauls (where legacy cache managers, base mixins, and configuration validation rules were heavily modernized), some models in the auto-tagger pipeline might cause problems.
+
+### 1. Florence-2 (`microsoft/Florence-2-...`)
+
+* **Compatibility Status**: Stable (with flags).
+* **Potential Gotchas**: Florence-2 uses custom architecture code (`code_florence_2.py`) loaded via `trust_remote_code=True`. On post-v4.50 packages, it can throw flash-attention or cache mismatch warnings if not explicitly told to use eager execution.
+* **Current Defense**: my code already passing `attn_implementation="eager"` and `use_cache=False`, which completely shields it from breaking changes.
+
+### 2. Moondream2 (`vikhyatk/moondream2`)
+
+* **Compatibility Status**: **Fixed & Stable** (using  dynamic monkey-patches).
+* **Potential Gotchas**: Built on a `PhiForCausalLM` remote-code text backend, it was the heaviest hit by `GenerationMixin` removal, `_from_model_config` checks, and `DynamicCache` deprecations (`seen_tokens`, `get_max_length`, `get_usable_length`).
+* **Current Defense**: a comprehensive wrapper handles config mapping, cache properties, and generation fallback dynamically on load.
+
+### 3. BLIP / BLIP-2 (`Salesforce/blip-...`)
+
+* **Compatibility Status**: **Generally Safe**, but with a small caveat.
+* **Why**: Unlike Florence-2 or Moondream, standard BLIP and BLIP-2 use official mainstream classes built directly into `transformers` (`BlipForConditionalGeneration`, etc.) rather than external `trust_remote_code` scripts. However, older checkpoints can occasionally throw warnings if their internal vision encoders or text query tokens expect legacy processor fields.
+* **Watch out for**: Tokenizer maximum length handling or deprecated image processor kwargs (`images` vs `pixel_values`), though these usually throw soft deprecation warnings rather than hard crashes.
+
+### 4. WD Tagger (Hugging Face / timm-based variants)
+
+* **Compatibility Status**: Safe.
+* **Why**: WD Tagger models (such as `SmilingWolf/wd-v1-4-moat-tagger` or `swinv2` variants) are typically built on top of standard image classification backends via `timm` or standard `AutoModelForImageClassification`. Because they don't use text-generation loops or custom `DynamicCache` generation structures, they largely bypass the breaking changes introduced in modern `transformers` releases.
+
+---
+
+Since we are locked to `transformers v4.57.6`, any *new* vision-language or causal model we integrate that relies on `trust_remote_code=True` will likely share Moondream's DNA (custom text models divorced from `GenerationMixin` or customized caches).
+
+### My conclusion:
+- use  WD Tagger models for speed and stability for danbooru / e621 style tags used in SDXL models
+- use BLIP and Florence-2 for natural language prompts for FLUX/Qwen models.
+- it's a lot of work and monkey-patching to keep the old models working
+- keep it simple...stupid
+
+### To do list:
+-  auto-complete  danbooru / e621 style tags in  'add a tag' function
+-  better keyboard shortcuts (i dunno, i need feedback)
+-  ?
+-  profit 
