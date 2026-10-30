@@ -1,8 +1,10 @@
 {
   "keywords": "",
-  "model_name": "Salesforce/blip2-opt-2.7b",
+  "model_name": "microsoft/Florence-2-base",
   "general_threshold": 0.35,
   "character_threshold": 0.85,
   "tag_strategy": "add",
-  "task_command": "<CAPTION>"
+  "task_command": "<MORE_DETAILED_CAPTION>",
+  "general_mcut_enabled": false,
+  "character_mcut_enabled": false
 }
