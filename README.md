@@ -69,6 +69,14 @@ To change the interrogator settings click the settings button
 <img src='assets/TagGUI-Next_settings.png' alt='TagGUI-Next settings' width='100%'>
 
 ---
+##  Pro-Tip for Massive Models (BLIP-2 / Qwen 7B)
+If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter captioning models alongside PySide6/WebEngine can easily hit out-of-memory (OOM) limits. If you experience freezes or crashes with larger vision models, consider:
+
+- Using smaller, lightweight alternatives like Moondream2 (vikhyatk/moondream2) or Florence-2-base (microsoft/Florence-2-base-ft) which load lightning-fast and run comfortably under 4–6GB VRAM.
+
+- Keeping the SmilingWolf Taggers for fast, high-performance tag management
+
+---
 ## Installation & Setup
 
 **Clone the repository:**
