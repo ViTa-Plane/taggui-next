@@ -2,9 +2,11 @@
 
 <img src='icon.png' alt='TagGUI-Next icon' width='128'>
 
-**TagGUI-Next** is a fast, modern, and self-contained local dataset manager and tagger built with **PySide6**, **PyTorch**, and **timm**. Designed to replace the aging [TagGUI](https://github.com/jhc13/taggui)  and [BooruDatasetTagManager](https://github.com/starik222/BooruDatasetTagManager) in my personal workflows. It provides an intuitive HTML5/JavaScript GUI powered by `QWebChannel` for effortless tagging, bulk editing, and dataset organization for machine learning models (such as Stable Diffusion).
+**TagGUI-Next** is a fast, modern, and self-contained local dataset manager and tagger built with **PySide6**, **PyTorch**, and **timm**. Designed to replace the aging [TagGUI](https://github.com/jhc13/taggui)  and [BooruDatasetTagManager](https://github.com/starik222/BooruDatasetTagManager) , in my personal workflows. It provides an intuitive HTML5/JavaScript GUI powered by `QWebChannel` for effortless tagging, bulk editing, and dataset organization for machine learning models (such as Stable Diffusion).
 
-**TagGUI-Next** for now, uses hardcoded SmilingWolf / wd-eva02-large-tagger-v3 for an image interrogator. It's best for danbooru/e621 style tags, useful in preparation of image datasets for LoRa Training (for Pony XL v6/ Illustrious/ NoobAi and SDXL 1.0). If there is any interest of other interrogator models i may add more.
+**TagGUI-Next** by default uses SmilingWolf / wd-eva02-large-tagger-v3 for an image interrogator. It's best for danbooru/e621 style tags, useful in preparation of image datasets for LoRa Training (for Pony XL v6/ Illustrious/ NoobAi and SDXL 1.0).
+
+**TagGUI-Next** is tested to work with masive models like BLIP-2
 
 ---
 
@@ -55,11 +57,11 @@ files.
 In addition to manual tagging, you can automatically generate captions or tags
 for your images inside ***TagGUI-Next***.
 
-The image interrogator is hardcoded to SmilingWolf/wd-eva02-large-tagger-v3 model,
-It will be downloaded automatically in the first use (about 1.2GB, be patient and wait it to be instaled )
+The default image interrogator is [SmilingWolf's](https://huggingface.co/SmilingWolf) [(wd-eva02-large-tagger-v3)](https://huggingface.co/SmilingWolf/wd-eva02-large-tagger-v3) model,
+It will be downloaded automatically on the first use (about 1.2GB, be patient and wait it to be instaled)
 
-GPU generation requires a compatible NVIDIA GPU, and CPU generation is also
-supported as a fallback. If you have supported CUDA GPU and the GPU acceleration don't work, your installed pytorch is CPU only version.
+GPU generation requires a compatible NVIDIA GPU, the CPU generation is also
+supported as a fallback.
 
 To use the feature, select the images you want to caption in the image list,
 then click the AutoTag button.
@@ -86,7 +88,7 @@ If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter c
   ```
 - run install.bat to automatically set the python_embeded and to  install the requirements (about 3.72GB)
 - start the TagGUI-Next with run.bat
-- on first use of the auto-tagger, the app will download the selected interrogator (wd-eva02-large-tagger-v3) to huggingface hub directory (1.2GB for SmilingWolf)
+- on first use, the auto-tagger will download the default interrogator [(wd-eva02-large-tagger-v3)](https://huggingface.co/SmilingWolf/wd-eva02-large-tagger-v3) to the local huggingface hub directory (about 1.2GB)
 - it's tested on Python 3.13.15 ,torch 2.14.1+cu130, torchvision 0.29.1+cu130
     
 
