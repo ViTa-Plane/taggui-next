@@ -12,7 +12,6 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtGui import QIcon
 from bridge import TagGUIBridge
 
-
 class MainWindow(QMainWindow):
 
   def __init__(self):
@@ -44,6 +43,11 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
   app = QApplication(sys.argv)
+
+  qss_path = Path(__file__).parent / "assets" / "style.qss"
+  if qss_path.exists():
+    app.setStyleSheet(qss_path.read_text(encoding="utf-8"))
+
   window = MainWindow()
   window.show()
   sys.exit(app.exec())

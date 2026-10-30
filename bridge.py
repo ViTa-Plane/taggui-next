@@ -9,9 +9,478 @@ from PIL import Image
 import numpy as np
 import torch
 
-from PySide6.QtCore import QObject, Slot, Signal, Property
-from PySide6.QtWidgets import QFileDialog
+from PySide6.QtCore import QObject, Slot, Signal, Property, QThread, QEventLoop, Qt
+from PySide6.QtWidgets import QFileDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QPushButton, QFrame
+from PySide6.QtGui import QIcon, QColor
 from huggingface_hub.constants import HF_HUB_CACHE
+
+
+# ==============================================================================
+# FANCIER DARK THEME CONFIRMATION & PROGRESS DIALOGS
+# ==============================================================================
+
+class TaggingConfirmDialog(QDialog):
+    def __init__(self, count, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("TagGUI Next - Confirm Auto-Tag")
+        self.resize(420, 200)
+        self.setModal(True)
+
+        # Make window borderless and keep transparent or dark rounded corners
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        icon_path = Path(__file__).parent / "assets" / "icon.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(18, 18, 18, 18)
+        card_layout.setSpacing(12)
+
+        header_layout = QHBoxLayout()
+        badge = QLabel("✨")
+        badge.setStyleSheet("""
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 14px;
+        """)
+        header_layout.addWidget(badge)
+
+        title = QLabel("RUN LOCAL PYTORCH AUTOTAG")
+        title.setObjectName("titleLabel")
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        card_layout.addLayout(header_layout)
+
+        desc = QLabel(f"Run local PyTorch auto-tagger for <b>{count}</b> selected image(s)? This will process images using your selected model configuration.")
+        desc.setObjectName("descLabel")
+        desc.setWordWrap(True)
+        card_layout.addWidget(desc)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setObjectName("cancelBtn")
+        self.cancel_btn.clicked.connect(self.reject)
+
+        self.confirm_btn = QPushButton("Start AutoTag")
+        self.confirm_btn.setObjectName("confirmBtn")
+        self.confirm_btn.clicked.connect(self.accept)
+
+        btn_layout.addWidget(self.cancel_btn)
+        btn_layout.addWidget(self.confirm_btn)
+        card_layout.addLayout(btn_layout)
+
+        main_layout.addWidget(card)
+
+
+class DeleteConfirmDialog(QDialog):
+    def __init__(self, filename, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("TagGUI Next - Confirm Deletion")
+        self.resize(420, 200)
+        self.setModal(True)
+
+        # Make window borderless and keep transparent or dark rounded corners
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        icon_path = Path(__file__).parent / "assets" / "icon.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(18, 18, 18, 18)
+        card_layout.setSpacing(12)
+
+        header_layout = QHBoxLayout()
+        badge = QLabel("🗑️")
+        badge.setStyleSheet("""
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 14px;
+        """)
+        header_layout.addWidget(badge)
+
+        title = QLabel("DELETE IMAGE & TAGS")
+        title.setObjectName("titleLabel")
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        card_layout.addLayout(header_layout)
+
+        desc = QLabel(f"Are you sure you want to delete <b>{filename}</b> and its corresponding <code>.txt</code> tags file? This moves them to the local dataset trash.")
+        desc.setObjectName("descLabel")
+        desc.setWordWrap(True)
+        card_layout.addWidget(desc)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setObjectName("cancelBtn")
+        self.cancel_btn.clicked.connect(self.reject)
+
+        self.confirm_btn = QPushButton("Delete Files")
+        self.confirm_btn.setObjectName("deleteBtn")
+        self.confirm_btn.clicked.connect(self.accept)
+
+        btn_layout.addWidget(self.cancel_btn)
+        btn_layout.addWidget(self.confirm_btn)
+        card_layout.addLayout(btn_layout)
+
+        main_layout.addWidget(card)
+
+
+class TaggingProgressDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("TagGUI Next - Auto-Tagging")
+        self.resize(620, 420)
+        self.setModal(True)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowCloseButtonHint)
+
+        #Make window borderless and keep transparent or dark rounded corners
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        icon_path = Path(__file__).parent / "assets" / "icon.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(18, 18, 18, 18)
+        card_layout.setSpacing(12)
+
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+
+        badge = QLabel("✨")
+        badge.setStyleSheet("""
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 14px;
+        """)
+        header_layout.addWidget(badge)
+
+        header_text = QVBoxLayout()
+        header_text.setSpacing(2)
+
+        title = QLabel("AUTOTAG BATCH PROCESS")
+        title.setObjectName("titleLabel")
+
+        self.status_label = QLabel("Initializing engine...")
+        self.status_label.setObjectName("statusLabel")
+
+        header_text.addWidget(title)
+        header_text.addWidget(self.status_label)
+        header_layout.addLayout(header_text)
+        header_layout.addStretch()
+
+        card_layout.addLayout(header_layout)
+
+        self.log_output = QTextEdit()
+        self.log_output.setObjectName("logOutput")
+        self.log_output.setReadOnly(True)
+        card_layout.addWidget(self.log_output)
+
+        footer_layout = QHBoxLayout()
+        footer_layout.addStretch()
+
+        self.close_btn = QPushButton("Done")
+        self.close_btn.setObjectName("closeBtn")
+        self.close_btn.setEnabled(False)
+        self.close_btn.clicked.connect(self.accept)
+        footer_layout.addWidget(self.close_btn)
+
+        card_layout.addLayout(footer_layout)
+        main_layout.addWidget(card)
+
+    def append_log(self, text: str):
+        self.log_output.append(text)
+        sb = self.log_output.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+    def tagging_finished(self):
+        self.status_label.setText("Batch Auto-Tagging Complete!")
+        self.status_label.setStyleSheet("color: #34d399; font-size: 11px; font-family: monospace; font-weight: bold;")
+        self.close_btn.setEnabled(True)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowCloseButtonHint)
+        self.show()
+
+
+class AutoTagWorker(QThread):
+    log_signal = Signal(str)
+    finished_signal = Signal(str)
+
+    def __init__(self, bridge, paths, settings):
+        super().__init__()
+        self.bridge = bridge
+        self.paths = paths
+        self.settings = settings
+
+    def run(self):
+        results = {}
+        try:
+            general_threshold = self.settings.get("general_threshold", 0.35)
+            character_threshold = self.settings.get("character_threshold", 0.85)
+            general_mcut_enabled = self.settings.get("general_mcut_enabled", False)
+            character_mcut_enabled = self.settings.get("character_mcut_enabled", False)
+            model_name = self.settings.get("model_name", "SmilingWolf/wd-eva02-large-tagger-v3")
+            task_command = self.settings.get("task_command", "<CAPTION>")
+
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            dtype = torch.float16 if device == "cuda" else torch.float32
+
+            is_vlm = any(k in model_name.lower() for k in ["blip", "florence", "moondream", "joycaption", "qwen"])
+
+            model = None
+            processor = None
+            tagger_model = None
+            tagger_labels = []
+            tagger_categories = []
+
+            if is_vlm:
+                self.log_signal.emit(f"[Backend] Loading captioning/VLM model: {model_name}...")
+
+                if "blip" in model_name.lower() and "blip2" not in model_name.lower():
+                    from transformers import BlipProcessor, BlipForConditionalGeneration
+                    processor = BlipProcessor.from_pretrained(model_name, trust_remote_code=True)
+                    model = BlipForConditionalGeneration.from_pretrained(
+                        model_name, torch_dtype=dtype, trust_remote_code=True
+                    ).to(device)
+                else:
+                    from transformers import AutoProcessor
+                    processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+
+                    if "blip2" in model_name.lower():
+                        from transformers import Blip2ForConditionalGeneration
+                        model = Blip2ForConditionalGeneration.from_pretrained(
+                            model_name, torch_dtype=dtype, trust_remote_code=True
+                        ).to(device)
+
+                    elif "florence" in model_name.lower():
+                        from transformers import AutoModelForCausalLM
+
+                        model = AutoModelForCausalLM.from_pretrained(
+                            model_name,
+                            dtype=dtype,
+                            trust_remote_code=True,
+                            attn_implementation="eager"
+                        ).to(device)
+
+                    elif "moondream" in model_name.lower():
+                        from transformers import AutoModelForCausalLM, GenerationConfig
+
+                        model = AutoModelForCausalLM.from_pretrained(
+                            model_name,
+                            trust_remote_code=True,
+                            dtype=dtype,
+                            attn_implementation="eager",
+                            force_download=False
+                        ).to(device)
+
+                        if hasattr(model, "text_model"):
+                            if getattr(model.text_model, "generation_config", None) is None:
+                                try:
+                                    model.text_model.generation_config = GenerationConfig.from_model_config(model.text_model.config)
+                                except Exception:
+                                    model.text_model.generation_config = GenerationConfig()
+
+                            if not hasattr(model.text_model.generation_config, "_from_model_config"):
+                                model.text_model.generation_config._from_model_config = False
+
+                        if hasattr(model, "text_model"):
+                            try:
+                                from transformers.generation import GenerationMixin
+                            except ImportError:
+                                try:
+                                    from transformers.generation.utils import GenerationMixin
+                                except ImportError:
+                                    GenerationMixin = None
+
+                            if GenerationMixin and not isinstance(model.text_model, GenerationMixin):
+                                try:
+                                    model.text_model.__class__.__bases__ += (GenerationMixin,)
+                                except Exception:
+                                    pass
+
+                            if not hasattr(model.text_model, "generate"):
+                                model.text_model.generate = lambda *args, **kwargs: model.generate(*args, **kwargs)
+                    else:
+                        try:
+                            from transformers import AutoModelForVision2Seq
+                            model = AutoModelForVision2Seq.from_pretrained(
+                                model_name, torch_dtype=dtype, trust_remote_code=True
+                            ).to(device)
+                        except ImportError:
+                            from transformers import AutoModelForCausalLM
+                            model = AutoModelForCausalLM.from_pretrained(
+                                model_name, torch_dtype=dtype, trust_remote_code=True
+                            ).to(device)
+            else:
+                import timm
+                import csv
+                from huggingface_hub import hf_hub_download
+
+                self.log_signal.emit(f"[Backend] Loading tagger model: {model_name}...")
+                hf_model_str = f"hf-hub:{model_name}"
+                tagger_model = timm.create_model(hf_model_str, pretrained=True).eval().to(device)
+                csv_path = hf_hub_download(model_name, "selected_tags.csv")
+                with open(csv_path, mode="r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        tagger_labels.append(row["name"])
+                        tagger_categories.append(int(row["category"]))
+
+            for i, rel_path in enumerate(self.paths):
+                img_path = self.bridge._dataset_path / rel_path
+                if not img_path.exists():
+                    continue
+
+                try:
+                    if is_vlm:
+                        with Image.open(img_path) as raw_img:
+                            image = raw_img.convert("RGB")
+
+                        generated_text = ""
+                        with torch.no_grad():
+                            if "blip" in model_name.lower() and "blip2" not in model_name.lower():
+                                inputs = processor(images=image, return_tensors="pt").to(device, dtype)
+                                generated_ids = model.generate(**inputs, max_new_tokens=100, num_beams=3)
+                                generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[
+                                    0].strip()
+
+                            elif "florence" in model_name.lower():
+                                prompt = task_command if task_command else "<CAPTION>"
+                                fl_image = image.resize((768, 768), Image.Resampling.LANCZOS)
+                                inputs = processor(text=prompt, images=fl_image, return_tensors="pt").to(device, dtype)
+                                if not inputs or "pixel_values" in inputs and inputs["pixel_values"] is None:
+                                    self.log_signal.emit(f"[Backend] Skipping {rel_path}: Processor failed extraction.")
+                                    continue
+                                generated_ids = model.generate(
+                                    input_ids=inputs["input_ids"],
+                                    pixel_values=inputs["pixel_values"],
+                                    max_new_tokens=1024,
+                                    num_beams=3,
+                                    use_cache=False
+                                )
+                                raw_text = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+                                parsed = processor.post_process_generation(
+                                    raw_text, task=prompt, image_size=(768, 768)
+                                )
+                                if isinstance(parsed, dict) and prompt in parsed:
+                                    generated_text = parsed[prompt]
+                                elif isinstance(parsed, dict):
+                                    generated_text = list(parsed.values())[0]
+                                else:
+                                    generated_text = str(parsed)
+
+                            elif "moondream" in model_name.lower():
+                                enc_image = model.encode_image(image)
+                                generated_text = model.answer_question(enc_image, "Describe this image concisely.",
+                                                                       processor)
+
+                            else:
+                                inputs = processor(images=image, return_tensors="pt").to(device, dtype)
+                                generated_ids = model.generate(**inputs, max_new_tokens=100)
+                                generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[
+                                    0].strip()
+
+                        tags_str = generated_text
+                    else:
+                        with Image.open(img_path) as img:
+                            img = img.convert("RGB")
+                            size = 448
+                            target_size = (size, size)
+                            img.thumbnail(target_size, Image.Resampling.LANCZOS)
+                            new_img = Image.new("RGB", target_size, (255, 255, 255))
+                            new_img.paste(img, ((size - img.width) // 2, (size - img.height) // 2))
+
+                            img_array = np.array(new_img, dtype=np.float32) / 255.0
+                            tensor = torch.from_numpy(img_array).permute(2, 0, 1).unsqueeze(0).to(device)
+
+                        with torch.no_grad():
+                            preds = torch.sigmoid(tagger_model(tensor)[0]).cpu().numpy()
+
+                        gen_thresh = general_threshold
+                        char_thresh = character_threshold
+
+                        if general_mcut_enabled or character_mcut_enabled:
+                            g_probs = [score for idx, score in enumerate(preds) if
+                                       idx < len(tagger_labels) and tagger_categories[idx] == 0]
+                            c_probs = [score for idx, score in enumerate(preds) if
+                                       idx < len(tagger_labels) and tagger_categories[idx] == 4]
+
+                            if general_mcut_enabled and len(g_probs) > 0:
+                                gen_thresh = max(0.15, self.bridge._mcut_threshold(np.array(g_probs)))
+                            if character_mcut_enabled and len(c_probs) > 0:
+                                char_thresh = max(0.15, self.bridge._mcut_threshold(np.array(c_probs)))
+
+                        extracted_tags = []
+                        for idx, score in enumerate(preds):
+                            if idx < len(tagger_labels):
+                                tag_name = tagger_labels[idx]
+                                category = tagger_categories[idx]
+                                if category == 4 and score >= char_thresh:
+                                    extracted_tags.append(tag_name.replace("_", " "))
+                                elif category == 0 and score >= gen_thresh:
+                                    extracted_tags.append(tag_name.replace("_", " "))
+                        tags_str = ", ".join(extracted_tags)
+
+                    if tags_str:
+                        txt_path = img_path.with_suffix(".txt")
+                        txt_path.write_text(tags_str, encoding="utf-8")
+                        results[rel_path] = tags_str
+                        self.log_signal.emit(
+                            f"[Backend] ({i + 1}/{len(self.paths)}) Processed {img_path.name}: {tags_str}"
+                        )
+
+                except Exception as img_err:
+                    self.log_signal.emit(f"[Backend] Error processing {rel_path}: {img_err}")
+
+            if model is not None:
+                del model
+            if processor is not None:
+                del processor
+            if tagger_model is not None:
+                del tagger_model
+
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            self.log_signal.emit("[Backend] Batch processing finished. VRAM successfully cleared.")
+
+        except Exception as e:
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            self.log_signal.emit(f"[Backend] Batch processing failed: {e}")
+
+        self.finished_signal.emit(json.dumps(results))
 
 
 # ==============================================================================
@@ -265,6 +734,16 @@ class TagGUIBridge(QObject):
         tokens = [t.strip() for t in tags_string.split(",") if t.strip()]
         return int(len(tokens) * 1.5)
 
+    @Slot(str, result=bool)
+    def confirmAutoTagModal(self, count):
+        dialog = TaggingConfirmDialog(count)
+        return dialog.exec() == QDialog.Accepted
+
+    @Slot(str, result=bool)
+    def confirmDeleteModal(self, filename):
+        dialog = DeleteConfirmDialog(filename)
+        return dialog.exec() == QDialog.Accepted
+
     @Slot(str)
     def deleteImageAndTags(self, relative_path):
         try:
@@ -467,265 +946,41 @@ class TagGUIBridge(QObject):
             if not paths:
                 return json.dumps({})
 
-            general_threshold = 0.35
-            character_threshold = 0.85
-            general_mcut_enabled = False
-            character_mcut_enabled = False
-            model_name = "SmilingWolf/wd-eva02-large-tagger-v3"
-            task_command = "<CAPTION>"
+            settings = json.loads(self.getDatasetSettings())
 
-            settings_path = self._dataset_path / "settings.json"
-            if settings_path.exists():
-                try:
-                    s_data = json.loads(settings_path.read_text(encoding="utf-8"))
-                    general_threshold = float(s_data.get("general_threshold", 0.35))
-                    character_threshold = float(s_data.get("character_threshold", 0.85))
-                    general_mcut_enabled = bool(s_data.get("general_mcut_enabled", False))
-                    character_mcut_enabled = bool(s_data.get("character_mcut_enabled", False))
-                    model_name = s_data.get("model_name", "SmilingWolf/wd-eva02-large-tagger-v3")
-                    task_command = s_data.get("task_command", "<CAPTION>")
-                except Exception:
-                    pass
+            progress_dialog = TaggingProgressDialog()
+            progress_dialog.show()
 
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            dtype = torch.float16 if device == "cuda" else torch.float32
+            self.worker = AutoTagWorker(self, paths, settings)
 
-            results = {}
-            is_vlm = any(k in model_name.lower() for k in ["blip", "florence", "moondream", "joycaption", "qwen"])
+            self.worker.log_signal.connect(progress_dialog.append_log)
 
-            model = None
-            processor = None
-            tagger_model = None
-            tagger_labels = []
-            tagger_categories = []
+            loop = QEventLoop()
+            final_json_results = "{}"
 
-            if is_vlm:
-                print(f"[Backend] Loading captioning/VLM model for batch: {model_name}...")
+            def handle_finished(results_str):
+                nonlocal final_json_results
+                final_json_results = results_str
+                progress_dialog.tagging_finished()
 
-                if "blip" in model_name.lower() and "blip2" not in model_name.lower():
-                    from transformers import BlipProcessor, BlipForConditionalGeneration
-                    processor = BlipProcessor.from_pretrained(model_name, trust_remote_code=True)
-                    model = BlipForConditionalGeneration.from_pretrained(
-                        model_name, torch_dtype=dtype, trust_remote_code=True
-                    ).to(device)
-                else:
-                    from transformers import AutoProcessor
-                    processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+            self.worker.finished_signal.connect(handle_finished)
+            self.worker.finished_signal.connect(self.worker.deleteLater)
 
-                    if "blip2" in model_name.lower():
-                        from transformers import Blip2ForConditionalGeneration
-                        model = Blip2ForConditionalGeneration.from_pretrained(
-                            model_name, torch_dtype=dtype, trust_remote_code=True
-                        ).to(device)
+            progress_dialog.accepted.connect(loop.quit)
 
-                    elif "florence" in model_name.lower():
-                        from transformers import AutoModelForCausalLM
+            self.worker.start()
+            loop.exec()
 
-                        model = AutoModelForCausalLM.from_pretrained(
-                            model_name,
-                            dtype=dtype,
-                            trust_remote_code=True,
-                            attn_implementation="eager"
-                        ).to(device)
-
-                    elif "moondream" in model_name.lower():
-                        from transformers import AutoModelForCausalLM, GenerationConfig
-
-                        # FIX: Remove the old broken revision pin and force a fresh download
-                        # of the updated remote code that supports modern transformers.
-                        model = AutoModelForCausalLM.from_pretrained(
-                            model_name,
-                            trust_remote_code=True,
-                            dtype=dtype,
-                            attn_implementation="eager",
-                            force_download=False  # Change to True *once* if it still uses cached old files
-                        ).to(device)
-
-                        # Ensure text_model has a valid generation_config and prevent _from_model_config failure
-                        if hasattr(model, "text_model"):
-                            if getattr(model.text_model, "generation_config", None) is None:
-                                try:
-                                    model.text_model.generation_config = GenerationConfig.from_model_config(model.text_model.config)
-                                except Exception:
-                                    model.text_model.generation_config = GenerationConfig()
-
-                            if not hasattr(model.text_model.generation_config, "_from_model_config"):
-                                model.text_model.generation_config._from_model_config = False
-
-                        # Safely inject GenerationMixin & fallback to restore .generate() on PhiForCausalLM
-                        if hasattr(model, "text_model"):
-                            try:
-                                from transformers.generation import GenerationMixin
-                            except ImportError:
-                                try:
-                                    from transformers.generation.utils import GenerationMixin
-                                except ImportError:
-                                    GenerationMixin = None
-
-                            if GenerationMixin and not isinstance(model.text_model, GenerationMixin):
-                                try:
-                                    model.text_model.__class__.__bases__ += (GenerationMixin,)
-                                except Exception:
-                                    pass
-
-                            # Absolute fallback: bind a generate wrapper directly if missing
-                            if not hasattr(model.text_model, "generate"):
-                                model.text_model.generate = lambda *args, **kwargs: model.generate(*args, **kwargs)
-                    else:
-                        try:
-                            from transformers import AutoModelForVision2Seq
-                            model = AutoModelForVision2Seq.from_pretrained(
-                                model_name, torch_dtype=dtype, trust_remote_code=True
-                            ).to(device)
-                        except ImportError:
-                            from transformers import AutoModelForCausalLM
-                            model = AutoModelForCausalLM.from_pretrained(
-                                model_name, torch_dtype=dtype, trust_remote_code=True
-                            ).to(device)
-            else:
-                import timm
-                import csv
-                from huggingface_hub import hf_hub_download
-
-                print(f"[Backend] Loading tagger model for batch: {model_name}...")
-                hf_model_str = f"hf-hub:{model_name}"
-                tagger_model = timm.create_model(hf_model_str, pretrained=True).eval().to(device)
-                csv_path = hf_hub_download(model_name, "selected_tags.csv")
-                with open(csv_path, mode="r", encoding="utf-8") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        tagger_labels.append(row["name"])
-                        tagger_categories.append(int(row["category"]))
-
-            for i, rel_path in enumerate(paths):
-                img_path = self._dataset_path / rel_path
-                if not img_path.exists():
-                    continue
-
-                try:
-                    if is_vlm:
-                        with Image.open(img_path) as raw_img:
-                            image = raw_img.convert("RGB")
-
-                        generated_text = ""
-                        with torch.no_grad():
-                            if "blip" in model_name.lower() and "blip2" not in model_name.lower():
-                                inputs = processor(images=image, return_tensors="pt").to(device, dtype)
-                                generated_ids = model.generate(**inputs, max_new_tokens=100, num_beams=3)
-                                generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[
-                                    0].strip()
-
-
-                            elif "florence" in model_name.lower():
-                                prompt = task_command if task_command else "<CAPTION>"
-                                fl_image = image.resize((768, 768), Image.Resampling.LANCZOS)
-                                inputs = processor(text=prompt, images=fl_image, return_tensors="pt").to(device, dtype)
-                                # Safety guard against malformed images returning None tensors
-                                if not inputs or "pixel_values" in inputs and inputs["pixel_values"] is None:
-                                    print(f"[Backend] Skipping {rel_path}: Processor failed to extract pixel values.")
-                                    continue
-                                generated_ids = model.generate(
-                                    input_ids=inputs["input_ids"],
-                                    pixel_values=inputs["pixel_values"],
-                                    max_new_tokens=1024,
-                                    num_beams=3,
-                                    use_cache = False  # <--- Disables incompatible cache lookups on modern transformers
-                                )
-                                raw_text = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
-                                parsed = processor.post_process_generation(
-                                    raw_text, task=prompt, image_size=(768, 768)
-                                )
-                                if isinstance(parsed, dict) and prompt in parsed:
-                                    generated_text = parsed[prompt]
-                                elif isinstance(parsed, dict):
-                                    generated_text = list(parsed.values())[0]
-                                else:
-                                    generated_text = str(parsed)
-
-                            elif "moondream" in model_name.lower():
-                                enc_image = model.encode_image(image)
-                                generated_text = model.answer_question(enc_image, "Describe this image concisely.",
-                                                                       processor)
-
-                            else:
-                                inputs = processor(images=image, return_tensors="pt").to(device, dtype)
-                                generated_ids = model.generate(**inputs, max_new_tokens=100)
-                                generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[
-                                    0].strip()
-
-                        tags_str = generated_text
-                    else:
-                        with Image.open(img_path) as img:
-                            img = img.convert("RGB")
-                            size = 448
-                            target_size = (size, size)
-                            img.thumbnail(target_size, Image.Resampling.LANCZOS)
-                            new_img = Image.new("RGB", target_size, (255, 255, 255))
-                            new_img.paste(img, ((size - img.width) // 2, (size - img.height) // 2))
-
-                            img_array = np.array(new_img, dtype=np.float32) / 255.0
-                            tensor = torch.from_numpy(img_array).permute(2, 0, 1).unsqueeze(0).to(device)
-
-                        with torch.no_grad():
-                            preds = torch.sigmoid(tagger_model(tensor)[0]).cpu().numpy()
-
-                        gen_thresh = general_threshold
-                        char_thresh = character_threshold
-
-                        if general_mcut_enabled or character_mcut_enabled:
-                            g_probs = [score for idx, score in enumerate(preds) if
-                                       idx < len(tagger_labels) and tagger_categories[idx] == 0]
-                            c_probs = [score for idx, score in enumerate(preds) if
-                                       idx < len(tagger_labels) and tagger_categories[idx] == 4]
-
-                            if general_mcut_enabled and len(g_probs) > 0:
-                                gen_thresh = max(0.15, self._mcut_threshold(np.array(g_probs)))
-                            if character_mcut_enabled and len(c_probs) > 0:
-                                char_thresh = max(0.15, self._mcut_threshold(np.array(c_probs)))
-
-                        extracted_tags = []
-                        for idx, score in enumerate(preds):
-                            if idx < len(tagger_labels):
-                                tag_name = tagger_labels[idx]
-                                category = tagger_categories[idx]
-                                if category == 4 and score >= char_thresh:
-                                    extracted_tags.append(tag_name.replace("_", " "))
-                                elif category == 0 and score >= gen_thresh:
-                                    extracted_tags.append(tag_name.replace("_", " "))
-                        tags_str = ", ".join(extracted_tags)
-
-                    if tags_str:
-                        txt_path = img_path.with_suffix(".txt")
-                        txt_path.write_text(tags_str, encoding="utf-8")
-                        results[rel_path] = tags_str
-                        print(
-                            f"[Backend] ({i + 1}/{len(paths)}) Processed {img_path.name} using {model_name}: {tags_str}")
-
-                except Exception as img_err:
-                    print(f"[Backend] Error processing {rel_path}: {img_err}")
-
-            if model is not None:
-                del model
-            if processor is not None:
-                del processor
-            if tagger_model is not None:
-                del tagger_model
-
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            print("[Backend] Batch processing finished. VRAM successfully cleared.")
-
-            return json.dumps(results)
+            return final_json_results
 
         except Exception as e:
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            print(f"[Backend] Batch processing failed: {e}")
+            print(f"[Backend] Failed: {e}")
             import traceback
             traceback.print_exc()
-            return json.dumps({})
+            return json.dumps("{}")
 
     @Slot()
     def unloadActiveModel(self):
