@@ -1,6 +1,6 @@
 # TagGUI-Next
 
-<img src='icon.png' alt='TagGUI-Next icon' width='128'>
+<img src='assets/icon.png' alt='TagGUI-Next icon' width='128'>
 
 **TagGUI-Next** is a fast, modern, and self-contained local dataset manager and tagger built with **PySide6**, **PyTorch**, and **timm**. Designed to replace the aging [TagGUI](https://github.com/jhc13/taggui)  and [BooruDatasetTagManager](https://github.com/starik222/BooruDatasetTagManager) , in my personal workflows. It provides an intuitive HTML5/JavaScript GUI powered by `QWebChannel` for effortless tagging, bulk editing, and dataset organization for machine learning models (such as Stable Diffusion).
 
@@ -107,6 +107,13 @@ If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter c
     tqdm               4.70.1
     transformers       4.57.6
     ```
+## Computer without Google Chrome installed.
+
+**TagGUI-Next** uses PySide6's QWebEngineView to render the user interface (ui/index.html).
+  - Qt WebEngine comes with its own bundled, self-contained Chromium rendering engine built directly into the PySide6 package binaries.
+  - It does not rely on or look for an externally installed Google Chrome or Chromium browser on the host system.
+Therefore, users can run the application seamlessly on a clean machine (such as a fresh Windows, macOS, or Linux installation) without needing Google Chrome installed at all.
+
 ## Models compatibility 
 
 **TagGUI-Next** uses  **Transformers v4.57.6** . Because v4.5x sits firmly past the major structural overhauls (where legacy cache managers, base mixins, and configuration validation rules were heavily modernized), some models in the auto-tagger pipeline might cause problems.
