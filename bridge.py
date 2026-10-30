@@ -529,10 +529,48 @@ class TagGUIBridge(QObject):
                         ).to(device)
 
                     elif "moondream" in model_name.lower():
-                        from transformers import AutoModelForCausalLM
+                        from transformers import AutoModelForCausalLM, GenerationConfig
+
+                        # FIX: Remove the old broken revision pin and force a fresh download
+                        # of the updated remote code that supports modern transformers.
                         model = AutoModelForCausalLM.from_pretrained(
-                            model_name, trust_remote_code=True, revision="2024-05-08", torch_dtype=dtype
+                            model_name,
+                            trust_remote_code=True,
+                            dtype=dtype,
+                            attn_implementation="eager",
+                            force_download=False  # Change to True *once* if it still uses cached old files
                         ).to(device)
+
+                        # Ensure text_model has a valid generation_config and prevent _from_model_config failure
+                        if hasattr(model, "text_model"):
+                            if getattr(model.text_model, "generation_config", None) is None:
+                                try:
+                                    model.text_model.generation_config = GenerationConfig.from_model_config(model.text_model.config)
+                                except Exception:
+                                    model.text_model.generation_config = GenerationConfig()
+
+                            if not hasattr(model.text_model.generation_config, "_from_model_config"):
+                                model.text_model.generation_config._from_model_config = False
+
+                        # Safely inject GenerationMixin & fallback to restore .generate() on PhiForCausalLM
+                        if hasattr(model, "text_model"):
+                            try:
+                                from transformers.generation import GenerationMixin
+                            except ImportError:
+                                try:
+                                    from transformers.generation.utils import GenerationMixin
+                                except ImportError:
+                                    GenerationMixin = None
+
+                            if GenerationMixin and not isinstance(model.text_model, GenerationMixin):
+                                try:
+                                    model.text_model.__class__.__bases__ += (GenerationMixin,)
+                                except Exception:
+                                    pass
+
+                            # Absolute fallback: bind a generate wrapper directly if missing
+                            if not hasattr(model.text_model, "generate"):
+                                model.text_model.generate = lambda *args, **kwargs: model.generate(*args, **kwargs)
                     else:
                         try:
                             from transformers import AutoModelForVision2Seq
