@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TagGUI Next - Dataset Manager</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="theme_stylesheet.css">
 </head>
 
 <body>
@@ -17,10 +17,10 @@
         </h1>
         <div style="display: flex; align-items: center; gap: 8px; min-width: 0; width: 100%;">
           <p id="dataset-path-label" title="Dataset Path" style="font-size: 10px; color: #94a3b8; font-family: monospace; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;">Loading...</p>
-          <button id="open-dataset-btn" title="Open Dataset Directory" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">Open Dataset</button>
-          <button id="settings-btn" title="Configure Interrogator Settings" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⚙️ Settings</button>
-          <button id="github-btn" title="View source on GitHub" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; flex-shrink: 0;">⭐ GitHub</button>
-          <button id="help-btn" title="Help & Shortcuts" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; flex-shrink: 0;">[?] Help</button>
+          <button id="open-dataset-btn" class="header-btn" title="Open Dataset Directory">Open Dataset</button>
+          <button id="settings-btn" class="header-btn" title="Configure Interrogator Settings">Settings</button>
+          <button id="github-btn" class="header-btn" title="View source on GitHub">GitHub</button>
+          <button id="help-btn" class="header-btn" title="Help & Shortcuts">Help</button>
         </div>
       </div>
     </div>
@@ -74,9 +74,11 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
           <span style="font-size: 9px; color: #64748b; font-family: monospace;">Prepends & sorts</span>
           <div style="display: flex; gap: 6px;">
-            <button id="move-front-btn" title="Move matching existing keywords to the front of the tag list" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Move to Front</button>
-            <button id="apply-keywords-btn" title="Apply keywords to current selection (Enter)" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Apply</button>
-            <button id="apply-all-keywords-btn" title="Apply keywords to all pictures in dataset" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">Apply to All</button>
+            <div style="display: flex; gap: 6px;">
+              <button id="move-front-btn" class="action-sm-btn" title="Move matching existing keywords to the front of the tag list">Move to Front</button>
+              <button id="apply-keywords-btn" class="action-sm-btn" title="Apply keywords to current selection (Enter)">Apply</button>
+              <button id="apply-all-keywords-btn" class="action-sm-btn" title="Apply keywords to all pictures in dataset">Apply to All</button>
+            </div>
           </div>
         </div>
       </div>
@@ -99,12 +101,11 @@
             <div id="token-progress" style="background-color: #6366f1; height: 100%; width: 0%; transition: width 0.2s, background-color 0.2s;"></div>
           </div>
         </div>
-
         <div class="token-box">
           <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">Sort Tags</div>
           <div style="display: flex; gap: 6px;">
-            <button id="sort-alpha-btn" title="Sort active tags alphabetically (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #a5b4fc; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort A-Z</button>
-            <button id="sort-freq-btn" title="Sort active tags by frequency in dataset (ignoring keywords)" style="flex: 1; background: #12141c; border: 1px solid rgba(255,255,255,0.1); color: #38bdf8; font-size: 10px; padding: 6px; border-radius: 4px; cursor: pointer;">Sort by Frequency</button>
+            <button id="sort-alpha-btn" class="sort-btn" title="Sort active tags alphabetically (ignoring keywords)">Sort A-Z</button>
+            <button id="sort-freq-btn" class="sort-btn" title="Sort active tags by frequency in dataset (ignoring keywords)">Sort by Frequency</button>
           </div>
         </div>
       </div>
@@ -168,11 +169,28 @@
 
       <!-- settings-modal-->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
-        <button id="reset-settings-btn" style="background: #181a24; border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; font-size: 11px; padding: 6px 12px; border-radius: 6px; cursor: pointer;">Reset Defaults</button>
+        <button id="reset-settings-btn" class="settings-reset-btn">Reset Defaults</button>
         <div style="display: flex; gap: 8px;">
-          <button id="close-settings-btn" style="background: #181a24; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 11px; padding: 6px 12px; border-radius: 6px; cursor: pointer;">Cancel</button>
-          <button id="save-settings-btn" style="background: #6366f1; border: none; color: white; font-size: 11px; font-weight: bold; padding: 6px 14px; border-radius: 6px; cursor: pointer;">Save Settings</button>
+          <button id="close-settings-btn" class="settings-cancel-btn">Cancel</button>
+          <button id="save-settings-btn" class="settings-save-btn">Save Settings</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fancy Edit Tag Modal -->
+  <div id="edit-tag-modal" class="modal-overlay">
+    <div class="modal-content" style="width: 480px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <h2 id="edit-tag-title" style="font-size: 13px; font-weight: bold; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Edit Tag / Caption</h2>
+        <button id="close-edit-tag-x-btn" style="background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">×</button>
+      </div>
+      <div>
+        <textarea id="edit-tag-textarea" class="text-input" rows="5" style="resize: vertical; min-height: 100px; font-family: monospace; line-height: 1.4; padding: 10px;"></textarea>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
+        <button id="cancel-edit-tag-btn" class="modal-cancel-btn">Cancel</button>
+        <button id="save-edit-tag-btn" class="modal-save-btn">Save Changes</button>
       </div>
     </div>
   </div>
@@ -254,6 +272,37 @@
         }
         return Array.from(set).filter(idx => idx !== null && idx >= 0);
     }
+
+    let currentEditCallback = null;
+
+    function openEditTagModal(title, initialValue, onSave) {
+        document.body.classList.add('modal-open');
+        document.getElementById('edit-tag-title').innerText = title;
+        const textarea = document.getElementById('edit-tag-textarea');
+        textarea.value = initialValue;
+        currentEditCallback = onSave;
+        document.getElementById('edit-tag-modal').style.display = 'flex';
+        setTimeout(() => {
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        }, 50);
+    }
+
+    function closeEditTagModal() {
+        document.body.classList.remove('modal-open');
+        document.getElementById('edit-tag-modal').style.display = 'none';
+        currentEditCallback = null;
+    }
+
+    document.getElementById('close-edit-tag-x-btn').addEventListener('click', closeEditTagModal);
+    document.getElementById('cancel-edit-tag-btn').addEventListener('click', closeEditTagModal);
+    document.getElementById('save-edit-tag-btn').addEventListener('click', () => {
+        const val = document.getElementById('edit-tag-textarea').value.trim();
+        if (currentEditCallback && val) {
+            currentEditCallback(val);
+        }
+        closeEditTagModal();
+    });
 
     function openSettingsModal() {
         document.body.classList.add('modal-open');
@@ -911,35 +960,35 @@
 
             item.ondblclick = (e) => {
                 e.stopPropagation();
-                const newTagVal = prompt(`Rename tag "${tag}" globally across all images:`, tag);
-                if (newTagVal === null) return;
-                const trimmedNew = newTagVal.trim().toLowerCase();
-                if (!trimmedNew || trimmedNew === tag.toLowerCase()) return;
+                openEditTagModal("Edit Tag / Caption:", tag, (newTagVal) => {
+                    const trimmedNew = newTagVal.trim().toLowerCase();
+                    if (!trimmedNew || trimmedNew === tag.toLowerCase()) return;
 
-                pushUndoState();
-                const updates = {};
-                datasetImages.forEach(img => {
-                    let changed = false;
-                    img.tags = img.tags.map(t => {
-                        if (t.toLowerCase() === tag.toLowerCase()) {
-                            changed = true;
-                            return trimmedNew;
+                    pushUndoState();
+                    const updates = {};
+                    datasetImages.forEach(img => {
+                        let changed = false;
+                        img.tags = img.tags.map(t => {
+                            if (t.toLowerCase() === tag.toLowerCase()) {
+                                changed = true;
+                                return trimmedNew;
+                            }
+                            return t;
+                        });
+                        if (changed) {
+                            img.tags = cleanImageTags(img.tags);
+                            updates[img.relative_path] = img.tags.join(', ');
                         }
-                        return t;
                     });
-                    if (changed) {
-                        img.tags = cleanImageTags(img.tags);
-                        updates[img.relative_path] = img.tags.join(', ');
-                    }
-                });
 
-                if (backend && Object.keys(updates).length > 0) {
-                    backend.saveBatchImageTags(JSON.stringify(updates));
-                }
-                selectedLeftTag = trimmedNew;
-                renderGlobalTagsList();
-                renderActiveTags();
-                renderGrid();
+                    if (backend && Object.keys(updates).length > 0) {
+                        backend.saveBatchImageTags(JSON.stringify(updates));
+                    }
+                    selectedLeftTag = trimmedNew;
+                    renderGlobalTagsList();
+                    renderActiveTags();
+                    renderGrid();
+                });
             };
 
             item.onclick = (e) => {
@@ -1098,18 +1147,18 @@
 
             chip.addEventListener('dblclick', (e) => {
                 e.stopPropagation();
-                const newTagVal = prompt("Edit tag:", tag);
-                if (newTagVal === null) return;
-                const trimmedNew = newTagVal.trim().toLowerCase();
-                if (!trimmedNew || trimmedNew === tag.toLowerCase()) return;
+                openEditTagModal("Edit Tag / Caption:", tag, (newTagVal) => {
+                    const trimmedNew = newTagVal.trim();
+                    if (!trimmedNew || trimmedNew.toLowerCase() === tag.toLowerCase()) return;
 
-                pushUndoState();
-                img.tags[tagIdx] = trimmedNew;
-                img.tags = cleanImageTags(img.tags);
-                if (backend) backend.saveImageTags(img.relative_path, img.tags.join(', '));
-                renderActiveTags();
-                renderGlobalTagsList();
-                renderGrid();
+                    pushUndoState();
+                    img.tags[tagIdx] = trimmedNew;
+                    img.tags = cleanImageTags(img.tags);
+                    if (backend) backend.saveImageTags(img.relative_path, img.tags.join(', '));
+                    renderActiveTags();
+                    renderGlobalTagsList();
+                    renderGrid();
+                });
             });
 
             chip.addEventListener('dragstart', (e) => {

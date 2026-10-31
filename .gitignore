@@ -181,12 +181,11 @@ cython_debug/
 python_embeded
 .cursorignore
 .cursorindexingignore
+.taggui_thumbs
 /tags
 /.idea
 last_dataset.json
-/test
-/sample_dataset/
 backup_script.py
 /backup
-sample_dataset/settings.json
+/tmp
 /sample_dataset

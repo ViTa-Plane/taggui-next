@@ -8,6 +8,7 @@ from PIL import Image
 from PySide6.QtCore import QThread, Signal
 from huggingface_hub import hf_hub_download
 
+
 class AutoTagWorker(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(str)
@@ -17,6 +18,11 @@ class AutoTagWorker(QThread):
         self.bridge = bridge
         self.paths = paths
         self.settings = settings
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
+        self.requestInterruption()
 
     def run(self):
         results = {}
@@ -70,7 +76,7 @@ class AutoTagWorker(QThread):
 
                         model = AutoModelForCausalLM.from_pretrained(
                             model_name,
-                            dtype=dtype,
+                            torch_dtype=dtype,
                             trust_remote_code=True,
                             attn_implementation="eager"
                         ).to(device)
@@ -81,7 +87,7 @@ class AutoTagWorker(QThread):
                         model = AutoModelForCausalLM.from_pretrained(
                             model_name,
                             trust_remote_code=True,
-                            dtype=dtype,
+                            torch_dtype=dtype,
                             attn_implementation="eager",
                             force_download=False
                         ).to(device)
@@ -89,7 +95,8 @@ class AutoTagWorker(QThread):
                         if hasattr(model, "text_model"):
                             if getattr(model.text_model, "generation_config", None) is None:
                                 try:
-                                    model.text_model.generation_config = GenerationConfig.from_model_config(model.text_model.config)
+                                    model.text_model.generation_config = GenerationConfig.from_model_config(
+                                        model.text_model.config)
                                 except Exception:
                                     model.text_model.generation_config = GenerationConfig()
 
@@ -138,6 +145,10 @@ class AutoTagWorker(QThread):
                         tagger_categories.append(int(row["category"]))
 
             for i, rel_path in enumerate(self.paths):
+                if self._is_cancelled or self.isInterruptionRequested():
+                    self.log_signal.emit("[Backend] Process aborted by user. Cleaning up...")
+                    break
+
                 img_path = self.bridge._dataset_path / rel_path
                 if not img_path.exists():
                     continue
@@ -150,10 +161,24 @@ class AutoTagWorker(QThread):
                         generated_text = ""
                         with torch.no_grad():
                             if "blip" in model_name.lower() and "blip2" not in model_name.lower():
-                                inputs = processor(images=image, return_tensors="pt").to(device, dtype)
-                                generated_ids = model.generate(**inputs, max_new_tokens=150,min_length=30, num_beams=3,repetition_penalty=1.5)
-                                generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[
-                                    0].strip()
+                                prompt = "A detailed, descriptive caption of this image with background details:"
+                                inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, dtype)
+                                generated_ids = model.generate(
+                                    **inputs,
+                                    max_new_tokens=150,
+                                    min_length=30,
+                                    do_sample=True,
+                                    temperature=0.7,
+                                    repetition_penalty=1.2,
+                                    num_beams=3
+                                )
+
+                                # Slice off the input prompt token IDs so only the newly generated caption remains
+                                input_len = inputs["input_ids"].shape[1]
+                                generated_text = processor.batch_decode(
+                                    generated_ids[:, input_len:],
+                                    skip_special_tokens=True
+                                )[0].strip()
 
                             elif "florence" in model_name.lower():
                                 prompt = task_command if task_command else "<CAPTION>"
@@ -187,7 +212,9 @@ class AutoTagWorker(QThread):
 
                             elif "joycaption" in model_name.lower() or "llava" in model_name.lower():
                                 prompt = task_command if task_command else "Write a descriptive caption for this image."
-                                conversation = [
+
+                                convo = [
+                                    {"role": "system", "content": "You are a helpful image captioner."},
                                     {
                                         "role": "user",
                                         "content": [
@@ -196,21 +223,40 @@ class AutoTagWorker(QThread):
                                         ],
                                     },
                                 ]
-                                text_prompt = processor.apply_chat_template(conversation, tokenize=False, add_generation_prompt=True)
+
+                                text_prompt = processor.apply_chat_template(
+                                    convo,
+                                    tokenize=False,
+                                    add_generation_prompt=True
+                                )
+
                                 if isinstance(text_prompt, list):
                                     text_prompt = text_prompt[0]
 
-                                inputs = processor(images=[image], text=[text_prompt], return_tensors="pt").to(device, dtype)
+                                text_prompt = str(text_prompt)
+
+                                inputs = processor(
+                                    text=[text_prompt],
+                                    images=[image],
+                                    return_tensors="pt"
+                                ).to(device)
+
                                 if "pixel_values" in inputs and inputs["pixel_values"] is not None:
                                     inputs["pixel_values"] = inputs["pixel_values"].to(dtype)
 
-                                output_ids = model.generate(**inputs, max_new_tokens=256, do_sample=True, temperature=0.6)
+                                output_ids = model.generate(
+                                    **inputs,
+                                    max_new_tokens=256,
+                                    do_sample=True,
+                                    temperature=0.6
+                                )
+
+                                input_len = inputs["input_ids"].shape[1]
                                 decoded_outputs = processor.batch_decode(
-                                    output_ids[:, inputs["input_ids"].shape[1]:],
+                                    output_ids[:, input_len:],
                                     skip_special_tokens=True
                                 )
                                 generated_text = decoded_outputs[0].strip() if decoded_outputs else ""
-
 
                             else:
                                 inputs = processor(images=image, return_tensors="pt").to(device, dtype)
@@ -280,7 +326,11 @@ class AutoTagWorker(QThread):
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            self.log_signal.emit("[Backend] Batch processing finished. VRAM successfully cleared.")
+
+            if self._is_cancelled:
+                self.log_signal.emit("[Backend] Aborted successfully. VRAM successfully cleared.")
+            else:
+                self.log_signal.emit("[Backend] Batch processing finished. VRAM successfully cleared.")
 
         except Exception as e:
             gc.collect()

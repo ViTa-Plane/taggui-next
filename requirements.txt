@@ -1,14 +1,20 @@
+# Core GUI & Utilities
 PySide6
 pillow
-send2trash
 requests
-timm
-einops
 numpy
 huggingface_hub
-# use pre-v5 release where Florence-2's remote code was natively aligned
-transformers<5
-# Uses PyTorch's custom repository as a secondary source for CUDA support
+
+# Model Architectures & Computer Vision
+timm
+einops
+
+# PyTorch CUDA 13.0 wheel repository
 --extra-index-url https://download.pytorch.org/whl/cu130
-torch
-torchvision
+torch==2.14.1
+torchvision==0.29.1
+compressed-tensors
+accelerate
+
+# use pre-v5 release where Florence-2's remote code was natively aligned
+transformers==4.57.6

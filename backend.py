@@ -151,14 +151,12 @@ class DeleteConfirmDialog(QDialog):
 
 
 class TaggingProgressDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, worker_ref=None, parent=None):
         super().__init__(parent)
+        self.worker_ref = worker_ref
         self.setWindowTitle("TagGUI Next - Auto-Tagging")
         self.resize(620, 420)
         self.setModal(True)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowCloseButtonHint)
-
-        #Make window borderless and keep transparent or dark rounded corners
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
@@ -212,6 +210,12 @@ class TaggingProgressDialog(QDialog):
         footer_layout = QHBoxLayout()
         footer_layout.addStretch()
 
+        # Added Abort Button
+        self.abort_btn = QPushButton("Abort")
+        self.abort_btn.setObjectName("cancelBtn")
+        self.abort_btn.clicked.connect(self.on_abort_clicked)
+        footer_layout.addWidget(self.abort_btn)
+
         self.close_btn = QPushButton("Done")
         self.close_btn.setObjectName("closeBtn")
         self.close_btn.setEnabled(False)
@@ -221,14 +225,22 @@ class TaggingProgressDialog(QDialog):
         card_layout.addLayout(footer_layout)
         main_layout.addWidget(card)
 
+    def on_abort_clicked(self):
+        self.abort_btn.setEnabled(False)
+        self.status_label.setText("Aborting process...")
+        self.status_label.setStyleSheet("color: #f87171; font-size: 11px; font-family: monospace; font-weight: bold;")
+        if self.worker_ref:
+            self.worker_ref.cancel()
+
     def append_log(self, text: str):
         self.log_output.append(text)
         sb = self.log_output.verticalScrollBar()
         sb.setValue(sb.maximum())
 
     def tagging_finished(self):
-        self.status_label.setText("Batch Auto-Tagging Complete!")
+        self.status_label.setText("Batch Auto-Tagging Complete / Aborted!")
         self.status_label.setStyleSheet("color: #34d399; font-size: 11px; font-family: monospace; font-weight: bold;")
+        self.abort_btn.setEnabled(False)
         self.close_btn.setEnabled(True)
         self.setWindowFlags(self.windowFlags() | Qt.WindowCloseButtonHint)
         self.show()
@@ -365,7 +377,11 @@ class TagGUIBridge(QObject):
             ("SmilingWolf/wd-eva02-large-tagger-v3", 0.52),
         ]
 
-        blip_names = ["Salesforce/blip-image-captioning-large"]
+        blip_names = [
+            "Salesforce/blip-image-captioning-large",
+            "unography/blip-long-cap",
+            "ifmain/blip-image2promt-stable-diffusion-base"
+        ]
 
         blip2_names = [
             "Salesforce/blip2-opt-2.7b",
@@ -481,6 +497,16 @@ class TagGUIBridge(QObject):
 
     @Slot(str, result=int)
     def estimateTokens(self, tags_string):
+        if not tags_string:
+            return 0
+
+        # If it's a sentence caption (contains spaces and few/no commas), split by words
+        if "," not in tags_string and " " in tags_string:
+            words = [w.strip() for w in tags_string.split() if w.strip()]
+            # Standard subword tokenizers average ~1.3 tokens per word
+            return int(len(words) * 1.3)
+
+        # Otherwise, treat as comma-separated tags
         tokens = [t.strip() for t in tags_string.split(",") if t.strip()]
         return int(len(tokens) * 1.5)
 
@@ -702,6 +728,10 @@ class TagGUIBridge(QObject):
             progress_dialog.show()
 
             self.worker = AutoTagWorker(self, paths, settings)
+
+            # Pass the worker reference into the progress dialog
+            progress_dialog = TaggingProgressDialog(worker_ref=self.worker)
+            progress_dialog.show()
 
             self.worker.log_signal.connect(progress_dialog.append_log)
 
