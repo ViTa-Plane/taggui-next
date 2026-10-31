@@ -6,10 +6,11 @@
 
 **TagGUI-Next** by default uses SmilingWolf / wd-eva02-large-tagger-v3 for an image interrogator. It's best for danbooru/e621 style tags, useful in preparation of image datasets for LoRa Training (for Pony XL v6/ Illustrious/ NoobAi and SDXL 1.0).
 
-**TagGUI-Next**'s Auto Tagger is tested to work with models like:
+**TagGUI-Next**'s Auto Tagger is tested to work with those models:
  - [BLIP](https://huggingface.co/Salesforce/blip-image-captioning-large)/[BLIP-2](https://huggingface.co/paragon-AI/blip2-image-to-text)
  - [Florence-2](https://huggingface.co/microsoft/Florence-2-large-ft)
  - [Moondream2](https://huggingface.co/vikhyatk/moondream2)
+ - All WD Tagger models [SmilingWolf's](https://huggingface.co/SmilingWolf) 
 
 ---
 
