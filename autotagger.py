@@ -72,7 +72,7 @@ class AutoTagWorker(QThread):
                         ).to(device)
 
                     elif "florence" in model_name.lower():
-                        from transformers import AutoModelForCausalLM
+                        from transformers import AutoModelForCausalLM, GenerationConfig
 
                         model = AutoModelForCausalLM.from_pretrained(
                             model_name,
@@ -80,6 +80,77 @@ class AutoTagWorker(QThread):
                             trust_remote_code=True,
                             attn_implementation="eager"
                         ).to(device)
+
+                        # --- ROBUST CONFIG FIX FOR COGFLORENCE-2 ---
+                        for target_obj in [model, getattr(model, "language_model", None)]:
+                            if target_obj is not None:
+                                if getattr(target_obj, "generation_config", None) is None:
+                                    try:
+                                        target_obj.generation_config = GenerationConfig.from_model_config(target_obj.config)
+                                    except Exception:
+                                        target_obj.generation_config = GenerationConfig()
+
+                                if not hasattr(target_obj.generation_config, "_from_model_config"):
+                                    target_obj.generation_config._from_model_config = False
+                        # -------------------------------------------
+
+                        # Safety patch if missing generation mixin/attributes
+                        if hasattr(model, "language_model"):
+                            try:
+                                from transformers.generation import GenerationMixin
+                            except ImportError:
+                                try:
+                                    from transformers.generation.utils import GenerationMixin
+                                except ImportError:
+                                    GenerationMixin = None
+
+                            if GenerationMixin and not isinstance(model.language_model, GenerationMixin):
+                                try:
+                                    model.language_model.__class__.__bases__ += (GenerationMixin,)
+                                except Exception:
+                                    pass
+
+                            if not hasattr(model.language_model, "generate"):
+                                model.language_model.generate = lambda *args, **kwargs: model.generate(*args, **kwargs)
+
+                    # ---  QWEN LOADING BLOCK  ---
+                    elif "qwen" in model_name.lower():
+                        from transformers import AutoProcessor, Qwen2VLForConditionalGeneration, AutoModelForCausalLM
+
+                        # 1. Safe Processor Load with fallback
+                        try:
+                            processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+                        except Exception:
+                            # If config.json lacks model_type, force Qwen2/3-VL processor resolution
+                            processor = AutoProcessor.from_pretrained(
+                                model_name,
+                                trust_remote_code=True,
+                                model_type="qwen2_vl"
+                            )
+
+                        # 2. Safe Model Load with explicit Qwen VL classes fallback
+                        try:
+                            from transformers import AutoModelForVision2Seq
+                            model = AutoModelForVision2Seq.from_pretrained(
+                                model_name,
+                                torch_dtype=dtype,
+                                trust_remote_code=True
+                            ).to(device)
+                        except Exception:
+                            try:
+                                # Direct fallback for Qwen VL architectures
+                                model = Qwen2VLForConditionalGeneration.from_pretrained(
+                                    model_name,
+                                    torch_dtype=dtype,
+                                    trust_remote_code=True
+                                ).to(device)
+                            except Exception:
+                                model = AutoModelForCausalLM.from_pretrained(
+                                    model_name,
+                                    torch_dtype=dtype,
+                                    trust_remote_code=True
+                                ).to(device)
+                    # ----------------------------------------
 
                     elif "moondream" in model_name.lower():
                         from transformers import AutoModelForCausalLM, GenerationConfig
@@ -209,6 +280,50 @@ class AutoTagWorker(QThread):
                                 enc_image = model.encode_image(image)
                                 generated_text = model.answer_question(enc_image, "Describe this image concisely.",
                                                                        processor)
+
+                            # --- ADD THIS QWEN GENERATION BLOCK HERE ---
+                            elif "qwen" in model_name.lower():
+                                prompt = task_command if task_command else "Write a descriptive caption for this image."
+                                convo = [
+                                    {
+                                        "role": "user",
+                                        "content": [
+                                            {"type": "image"},
+                                            {"type": "text", "text": prompt},
+                                        ],
+                                    }
+                                ]
+                                text_prompt = processor.apply_chat_template(
+                                    convo,
+                                    tokenize=False,
+                                    add_generation_prompt=True
+                                )
+                                inputs = processor(
+                                    text=[text_prompt],
+                                    images=[image],
+                                    padding=True,
+                                    return_tensors="pt"
+                                ).to(device)
+
+                                if "pixel_values" in inputs and inputs["pixel_values"] is not None:
+                                    inputs["pixel_values"] = inputs["pixel_values"].to(dtype)
+
+                                output_ids = model.generate(
+                                    **inputs,
+                                    max_new_tokens=256,
+                                    do_sample=True,
+                                    temperature=0.6
+                                )
+
+                                input_len = inputs["input_ids"].shape[1]
+                                decoded_outputs = processor.batch_decode(
+                                    output_ids[:, input_len:],
+                                    skip_special_tokens=True
+                                )
+                                generated_text = decoded_outputs[0].strip() if decoded_outputs else ""
+                            # ---------------------------------------------
+
+
 
                             elif "joycaption" in model_name.lower() or "llava" in model_name.lower():
                                 prompt = task_command if task_command else "Write a descriptive caption for this image."
