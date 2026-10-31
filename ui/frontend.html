@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TagGUI Next - Dataset Manager</title>
-  <link rel="stylesheet" href="theme_stylesheet.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
@@ -391,7 +391,7 @@
             thresholdControls.style.display = isTagger ? 'block' : 'none';
         }
 
-        if (modelInfo && (modelInfo.category === 'florence2' || modelInfo.category === 'moondream')) {
+        if (modelInfo && (modelInfo.category === 'florence2' || modelInfo.category === 'moondream' || modelInfo.category === 'qwen')) {
             captionerGroup.style.display = 'block';
 
             taskCmdSelect.innerHTML = '';
