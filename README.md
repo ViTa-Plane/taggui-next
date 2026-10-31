@@ -111,7 +111,7 @@ If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter c
     tqdm               4.70.1
     transformers       4.57.6
     ```
-## Computer without Google Chrome installed.
+## Computers without Google Chrome installed.
 
 **TagGUI-Next** uses PySide6's QWebEngineView to render the user interface (ui/index.html).
   - Qt WebEngine comes with its own bundled, self-contained Chromium rendering engine built directly into the PySide6 package binaries.
