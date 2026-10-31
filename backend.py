@@ -405,6 +405,11 @@ class TagGUIBridge(QObject):
 
         moondream2_names = ["vikhyatk/moondream2"]
 
+        qwen_names = [
+            "Qwen/Qwen3-VL-4B-Instruct",
+            "DreamFast/Qwen3-VL-4b-Heretic",
+        ]
+
         joycaption_names = [
             "fancyfeast/llama-joycaption-alpha-two-hf-llava",
             "fancyfeast/llama-joycaption-beta-one-hf-llava",
@@ -465,6 +470,23 @@ class TagGUIBridge(QObject):
                 "category": "moondream",
                 "family": "Moondream2",
                 "commands": ["Short_caption", "Normal_caption", "Visual_query", "Object_detection", "Pointing"],
+                "installed": installed
+            })
+
+        for name in qwen_names:
+            installed = self._is_hf_model_downloaded(name)
+            commands = [
+                "Describe this image concisely.",
+                "Write a detailed caption for this image.",
+                "List all visible tags and keywords in this image.",
+                "Describe this image NSFW way",
+            ]
+            results.append({
+                "id": name,
+                "name": f"{'[Installed] ' if installed else ''}{name}",
+                "category": "qwen",
+                "family": "Qwen-VL",
+                "commands": commands,
                 "installed": installed
             })
 
