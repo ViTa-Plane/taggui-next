@@ -10,7 +10,9 @@
  - [BLIP](https://huggingface.co/Salesforce/blip-image-captioning-large)/[BLIP-2](https://huggingface.co/paragon-AI/blip2-image-to-text)
  - [Florence-2](https://huggingface.co/microsoft/Florence-2-large-ft)
  - [Moondream2](https://huggingface.co/vikhyatk/moondream2)
- - All WD Tagger models [SmilingWolf's](https://huggingface.co/SmilingWolf) 
+ - All WD Tagger models [SmilingWolf's](https://huggingface.co/SmilingWolf)
+  ## untested/fail
+ - Llama JoyCaption Beta One [Llama JoyCaption](https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava)
 
 ---
 
