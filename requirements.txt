@@ -4,6 +4,7 @@ send2trash
 requests
 timm
 einops
+numpy
 huggingface_hub
 # use pre-v5 release where Florence-2's remote code was natively aligned
 transformers<5

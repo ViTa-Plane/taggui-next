@@ -10,7 +10,7 @@ from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtGui import QIcon
-from bridge import TagGUIBridge
+from backend import TagGUIBridge
 
 class MainWindow(QMainWindow):
 
@@ -28,8 +28,8 @@ class MainWindow(QMainWindow):
     self.web_view = QWebEngineView(self)
     self.web_view.page().setWebChannel(self.channel)
 
-    # Point correctly to ./ui/index.html
-    html_path = (Path(__file__).parent / "ui" / "index.html").resolve()
+    # Point correctly to ./ui/frontend.html
+    html_path = (Path(__file__).parent / "ui" / "frontend.html").resolve()
     print(f"[Loader] Loading UI from: {html_path}")
     self.web_view.setUrl(QUrl.fromLocalFile(str(html_path)))
 
