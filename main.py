@@ -1,16 +1,27 @@
 import os
 import sys
-
-# Force hardware acceleration and GPU rasterization for smooth UI rendering
-os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--enable-gpu-rasterization --ignore-gpu-blocklist"
-
+import warnings
+import json
 from pathlib import Path
 from PySide6.QtCore import QUrl
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtGui import QIcon
-from backend import TagGUIBridge
+
+from bridge import TagGUIBridge
+
+#  supress third party Syntax Warnings
+warnings.filterwarnings("ignore", category=SyntaxWarning)
+
+# Force hardware acceleration and GPU rasterization for smooth UI rendering
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--enable-gpu-rasterization --ignore-gpu-blocklist"
+# os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu-rasterization --disable-gpu"
+
+
+# ==============================================================================
+# MAIN WINDOW CLASS
+# ==============================================================================
 
 class MainWindow(QMainWindow):
 
@@ -21,7 +32,7 @@ class MainWindow(QMainWindow):
 
     # Setup WebChannel Bridge
     self.channel = QWebChannel(self)
-    self.bridge = TagGUIBridge()
+    self.bridge = TagGUIBridge(parent_window=self)  # <--- Pass main window reference here
     self.channel.registerObject("backend", self.bridge)
 
     # Setup Web Engine View
@@ -44,7 +55,7 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
   app = QApplication(sys.argv)
 
-  qss_path = Path(__file__).parent / "assets" / "style.qss"
+  qss_path = Path(__file__).parent / "ui" / "style.qss"
   if qss_path.exists():
     app.setStyleSheet(qss_path.read_text(encoding="utf-8"))
 
