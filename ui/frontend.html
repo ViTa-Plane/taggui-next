@@ -64,8 +64,22 @@
         <span id="selected-filename" style="font-size: 10px; color: #64748b; font-family: monospace; font-weight: normal;">No image selected</span>
       </div>
 
-      <div class="container-pad" style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); position: relative;">
-        <input id="tag-input" type="text" aria-label="Add tag input" placeholder="Add tag... (Press Enter)" class="text-input" autocomplete="off" />
+      <div class="container-pad" style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); position: relative; width: 100%; box-sizing: border-box; overflow: visible;">
+        <!-- Autocomplete Toggle Bar -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; width: 100%; box-sizing: border-box;">
+          <span style="font-size: 10px; color: #94a3b8; font-family: monospace; font-weight: bold; white-space: nowrap;">
+            Autocomplete:
+          </span>
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <span style="font-size: 10px; color: #94a3b8; font-family: monospace; white-space: nowrap;">Internal / e621</span>
+            <label class="switch-toggle" title="Toggle between Internal and e621 Autocomplete">
+              <input type="checkbox" id="e621-toggle-cb">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+        </div>
+
+        <input id="tag-input" type="text" aria-label="Add tag input" placeholder="Add tag... (Press Enter)" class="text-input" autocomplete="off" style="width: 100%; box-sizing: border-box;" />
         <div id="autocomplete-box" class="autocomplete-box"></div>
       </div>
 
@@ -87,8 +101,8 @@
         <div>
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <span id="active-tag-count" style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase;">Tags (0)</span>
-            <button id="autotag-btn" title="Generate tags using local PyTorch Tagger" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none; color: white; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 4px; cursor: pointer;">✨ AutoTag</button>
-          </div>
+            <button id="autotag-btn" class="btn-primary" style="font-size: 10px; padding: 4px 10px;" title="Generate tags using local PyTorch Tagger">✨ AutoTag</button>
+           </div>
           <div id="active-tags-container" class="tag-chips"></div>
         </div>
 
@@ -112,89 +126,6 @@
     </aside>
   </div>
 
-  <!-- Settings Modal Dialog -->
-  <div id="settings-modal" class="modal-overlay">
-    <div class="modal-content">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h2 style="font-size: 13px; font-weight: bold; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Interrogator Settings</h2>
-        <button id="close-settings-x-btn" style="background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">×</button>
-      </div>
-
-      <div style="display: flex; flex-direction: column; gap: 12px;">
-        <div>
-          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Interrogator Model ([Installed] marked)</label>
-          <select id="setting-model-name" class="text-input" style="background-color: #181a24; color: #e2e8f0; cursor: pointer;">
-            <!-- Populated dynamically -->
-          </select>
-        </div>
-
-        <div id="group-tagger-settings">
-          <div id="threshold-controls-group">
-            <div>
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <label style="font-size: 11px; color: #94a3b8;">General Threshold</label>
-                <span id="val-general-threshold" style="font-size: 11px; font-family: monospace; color: #38bdf8;">0.35</span>
-              </div>
-              <input id="setting-general-threshold" type="range" min="0" max="1" step="0.01" class="custom-slider" />
-              <label style="font-size: 10px; color: #cbd5e1; display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
-                <input id="setting-general-mcut" type="checkbox" class="custom-checkbox" /> Use MCut threshold for General tags
-              </label>
-            </div>
-            <div style="margin-top: 14px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <label style="font-size: 11px; color: #94a3b8;">Character Threshold</label>
-                <span id="val-character-threshold" style="font-size: 11px; font-family: monospace; color: #38bdf8;">0.85</span>
-              </div>
-              <input id="setting-character-threshold" type="range" min="0" max="1" step="0.01" class="custom-slider" />
-              <label style="font-size: 10px; color: #cbd5e1; display: flex; align-items: center; gap: 8px; margin-top: 6px; cursor: pointer;">
-                <input id="setting-character-mcut" type="checkbox" class="custom-checkbox" /> Use MCut threshold for Character tags
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div id="group-captioner-settings" style="display: none;">
-          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Task Command / Prompt Mode</label>
-          <select id="setting-task-command" class="text-input" style="background-color: #181a24; color: #e2e8f0; cursor: pointer;"></select>
-        </div>
-
-        <div>
-          <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">AutoTag Mode</label>
-          <select id="setting-tag-strategy" class="text-input" style="background-color: #181a24; color: #e2e8f0; cursor: pointer;">
-            <option value="add">Add to existing tags</option>
-            <option value="replace">Replace existing tags (keep keywords)</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- settings-modal-->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
-        <button id="reset-settings-btn" class="settings-reset-btn">Reset Defaults</button>
-        <div style="display: flex; gap: 8px;">
-          <button id="close-settings-btn" class="settings-cancel-btn">Cancel</button>
-          <button id="save-settings-btn" class="settings-save-btn">Save Settings</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Fancy Edit Tag Modal -->
-  <div id="edit-tag-modal" class="modal-overlay">
-    <div class="modal-content" style="width: 480px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-        <h2 id="edit-tag-title" style="font-size: 13px; font-weight: bold; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Edit Tag / Caption</h2>
-        <button id="close-edit-tag-x-btn" style="background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">×</button>
-      </div>
-      <div>
-        <textarea id="edit-tag-textarea" class="text-input" rows="5" style="resize: vertical; min-height: 100px; font-family: monospace; line-height: 1.4; padding: 10px;"></textarea>
-      </div>
-      <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px;">
-        <button id="cancel-edit-tag-btn" class="modal-cancel-btn">Cancel</button>
-        <button id="save-edit-tag-btn" class="modal-save-btn">Save Changes</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Help Modal Dialog -->
   <div id="help-modal" class="modal-overlay">
     <div class="modal-content">
@@ -208,8 +139,8 @@
           <strong style="color: #38bdf8; display: block; margin-bottom: 4px;">Navigation & Selection</strong>
           <ul style="padding-left: 16px; display: flex; flex-direction: column; gap: 4px; font-family: monospace;">
             <li><strong>Arrow Keys:</strong> Navigate through images in the grid</li>
-            <li><strong>Shift + Click:</strong> Multi-select range of images or add tag to selection</li>
-            <li><strong>Ctrl / Cmd + Click:</strong> Toggle individual image selection or add tag to keywords</li>
+            <li><strong>Shift + Click:</strong> Toggle tag on selected images (add if missing, remove if present) or multi-select range</li>
+            <li><strong>Ctrl / Cmd + Click:</strong> Toggle tag in global training keywords (add if missing, remove if present) or toggle individual image selection</li>
             <li><strong>Ctrl / Cmd + A:</strong> Select all filtered images</li>
             <li><strong>Escape:</strong> Clear selections or active filters</li>
           </ul>
@@ -262,7 +193,12 @@
         general_mcut_enabled: false,
         character_mcut_enabled: false,
         tag_strategy: "add",
-        task_command: "<CAPTION>"
+        task_command: "<CAPTION>",
+        custom_commands: [],
+        thinking_mode: false,
+        temperature: 0.7,
+        top_p: 0.8,
+        top_k: 20
     };
 
     function getSelectedIndices() {
@@ -273,196 +209,30 @@
         return Array.from(set).filter(idx => idx !== null && idx >= 0);
     }
 
-    let currentEditCallback = null;
-
+    // Delegates to native Python PyQt6 EditPromptDialog
     function openEditTagModal(title, initialValue, onSave) {
-        document.body.classList.add('modal-open');
-        document.getElementById('edit-tag-title').innerText = title;
-        const textarea = document.getElementById('edit-tag-textarea');
-        textarea.value = initialValue;
-        currentEditCallback = onSave;
-        document.getElementById('edit-tag-modal').style.display = 'flex';
-        setTimeout(() => {
-            textarea.focus();
-            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-        }, 50);
-    }
-
-    function closeEditTagModal() {
-        document.body.classList.remove('modal-open');
-        document.getElementById('edit-tag-modal').style.display = 'none';
-        currentEditCallback = null;
-    }
-
-    document.getElementById('close-edit-tag-x-btn').addEventListener('click', closeEditTagModal);
-    document.getElementById('cancel-edit-tag-btn').addEventListener('click', closeEditTagModal);
-    document.getElementById('save-edit-tag-btn').addEventListener('click', () => {
-        const val = document.getElementById('edit-tag-textarea').value.trim();
-        if (currentEditCallback && val) {
-            currentEditCallback(val);
+        if (backend && typeof backend.openNativeEditPromptDialog === 'function') {
+            backend.openNativeEditPromptDialog(title, initialValue, function(newText) {
+                if (newText) {
+                    onSave(newText);
+                }
+            });
         }
-        closeEditTagModal();
-    });
+    }
 
     function openSettingsModal() {
-        document.body.classList.add('modal-open');
-        if (!backend) return;
-        backend.getAvailableInterrogators(function(res) {
-            try {
-                availableInterrogators = JSON.parse(res);
-            } catch(e) {
-                availableInterrogators = [];
-            }
-            populateModelDropdown();
-
-            backend.getDatasetSettings(function(settingsRes) {
-                try {
-                    currentSettingsData = JSON.parse(settingsRes);
-                } catch(e) {}
-
-                document.getElementById('setting-model-name').value = currentSettingsData.model_name || "SmilingWolf/wd-eva02-large-tagger-v3";
-
-                // Ensure saved threshold values are properly applied to sliders and text labels on load
-                const genVal = currentSettingsData.general_threshold ?? 0.35;
-                const charVal = currentSettingsData.character_threshold ?? 0.85;
-
-                const genSlider = document.getElementById('setting-general-threshold');
-                const charSlider = document.getElementById('setting-character-threshold');
-
-                genSlider.value = genVal;
-                document.getElementById('setting-general-threshold').addEventListener('input', function() {
-                    document.getElementById('val-general-threshold').innerText = Number(this.value).toFixed(2);
-                });
-
-                charSlider.value = charVal;
-                document.getElementById('setting-character-threshold').addEventListener('input', function() {
-                    document.getElementById('val-character-threshold').innerText = Number(this.value).toFixed(2);
-                });
-
-                document.getElementById('setting-general-mcut').checked = !!currentSettingsData.general_mcut_enabled;
-                document.getElementById('setting-character-mcut').checked = !!currentSettingsData.character_mcut_enabled;
-                document.getElementById('setting-tag-strategy').value = currentSettingsData.tag_strategy ?? "add";
-
-                onModelSelectedChange();
-                document.getElementById('settings-modal').style.display = 'flex';
-            });
-        });
-    }
-
-    function populateModelDropdown() {
-        const select = document.getElementById('setting-model-name');
-        select.innerHTML = '';
-
-        const families = {};
-        availableInterrogators.forEach(item => {
-            if (!families[item.family]) families[item.family] = [];
-            families[item.family].push(item);
-        });
-
-        for (const [familyName, models] of Object.entries(families)) {
-            const optgroup = document.createElement('optgroup');
-            optgroup.label = familyName;
-
-            models.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.name;
-                if (m.installed) {
-                    opt.style.color = '#34d399';
-                    opt.style.fontWeight = 'bold';
-                }
-                optgroup.appendChild(opt);
-            });
-            select.appendChild(optgroup);
+        if (backend && typeof backend.openNativeSettingsDialog === 'function') {
+            backend.openNativeSettingsDialog();
         }
-    }
-
-    function onModelSelectedChange() {
-        const selectedId = document.getElementById('setting-model-name').value;
-        const modelInfo = availableInterrogators.find(m => m.id === selectedId);
-
-        const thresholdControls = document.getElementById('threshold-controls-group');
-        const captionerGroup = document.getElementById('group-captioner-settings');
-        const taskCmdSelect = document.getElementById('setting-task-command');
-
-        const isTagger = modelInfo && modelInfo.category === 'tagger';
-
-        if (thresholdControls) {
-            thresholdControls.style.display = isTagger ? 'block' : 'none';
-        }
-
-        if (modelInfo && (modelInfo.category === 'florence2' || modelInfo.category === 'moondream' || modelInfo.category === 'qwen')) {
-            captionerGroup.style.display = 'block';
-
-            taskCmdSelect.innerHTML = '';
-            (modelInfo.commands || []).forEach(cmd => {
-                const opt = document.createElement('option');
-                opt.value = cmd;
-                opt.textContent = cmd;
-                taskCmdSelect.appendChild(opt);
-            });
-            if (currentSettingsData.task_command) {
-                taskCmdSelect.value = currentSettingsData.task_command;
-            }
-        } else {
-            captionerGroup.style.display = 'none';
-        }
-    }
-
-    function closeSettingsModal() {
-        document.body.classList.remove('modal-open'); // Re-enables background mouse tracking
-        document.getElementById('settings-modal').style.display = 'none';
-    }
-
-    function saveSettingsModal() {
-        const genVal = parseFloat(document.getElementById('setting-general-threshold').value);
-        const charVal = parseFloat(document.getElementById('setting-character-threshold').value);
-        const genMcut = document.getElementById('setting-general-mcut').checked;
-        const charMcut = document.getElementById('setting-character-mcut').checked;
-        const stratVal = document.getElementById('setting-tag-strategy').value;
-
-        currentSettingsData.model_name = document.getElementById('setting-model-name').value;
-        currentSettingsData.general_threshold = isNaN(genVal) ? 0.35 : genVal;
-        currentSettingsData.character_threshold = isNaN(charVal) ? 0.85 : charVal;
-        currentSettingsData.general_mcut_enabled = genMcut;
-        currentSettingsData.character_mcut_enabled = charMcut;
-        currentSettingsData.tag_strategy = stratVal;
-
-        const taskCmdSelect = document.getElementById('setting-task-command');
-        if (taskCmdSelect && taskCmdSelect.offsetParent !== null) {
-            currentSettingsData.task_command = taskCmdSelect.value;
-        }
-
-        if (keywordsInput) currentSettingsData.keywords = keywordsInput.value;
-
-        if (backend) {
-            backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
-        }
-        closeSettingsModal();
-    }
-
-    function resetSettingsToDefaults() {
-        document.getElementById('setting-model-name').value = "SmilingWolf/wd-eva02-large-tagger-v3";
-        onModelSelectedChange();
-
-        document.getElementById('setting-general-threshold').value = 0.35;
-        document.getElementById('val-general-threshold').innerText = "0.35";
-
-        document.getElementById('setting-character-threshold').value = 0.85;
-        document.getElementById('val-character-threshold').innerText = "0.85";
-
-        document.getElementById('setting-general-mcut').checked = false;
-        document.getElementById('setting-character-mcut').checked = false;
-        document.getElementById('setting-tag-strategy').value = "add";
     }
 
     function openHelpModal() {
-        document.body.classList.add('modal-open'); // Re-enables background mouse tracking
+        document.body.classList.add('modal-open');
         document.getElementById('help-modal').style.display = 'flex';
     }
 
     function closeHelpModal() {
-        document.body.classList.remove('modal-open'); // Re-enables background mouse tracking
+        document.body.classList.remove('modal-open');
         document.getElementById('help-modal').style.display = 'none';
     }
 
@@ -491,6 +261,19 @@
         return false;
     }
 
+    function applyLoadedSettings(settingsRes) {
+        try {
+            currentSettingsData = JSON.parse(settingsRes);
+            if (keywordsInput) keywordsInput.value = currentSettingsData.keywords || "";
+            if (e621ToggleCb) e621ToggleCb.checked = !!currentSettingsData.use_e621;
+        } catch(e) {
+            currentSettingsData = { keywords: "", general_threshold: 0.35, character_threshold: 0.85, tag_strategy: "add", use_e621: false };
+            if (keywordsInput) keywordsInput.value = "";
+            if (e621ToggleCb) e621ToggleCb.checked = false;
+        }
+        updateDatasetUI();
+    }
+
     function browseFolder() {
         if (!backend) return;
         backend.browseDatasetFolder(function(response) {
@@ -507,14 +290,7 @@
             undoStack = [];
 
             backend.getDatasetSettings(function(settingsRes) {
-                try {
-                    currentSettingsData = JSON.parse(settingsRes);
-                    if (keywordsInput) keywordsInput.value = currentSettingsData.keywords || "";
-                } catch(e) {
-                    currentSettingsData = { keywords: "", general_threshold: 0.35, character_threshold: 0.85, tag_strategy: "add" };
-                    if (keywordsInput) keywordsInput.value = "";
-                }
-                updateDatasetUI();
+                applyLoadedSettings(settingsRes);
             });
         });
     }
@@ -529,14 +305,7 @@
             filteredImages = [...datasetImages];
 
             backend.getDatasetSettings(function(settingsRes) {
-                try {
-                    currentSettingsData = JSON.parse(settingsRes);
-                    if (keywordsInput) keywordsInput.value = currentSettingsData.keywords || "";
-                } catch(e) {
-                    currentSettingsData = { keywords: "", general_threshold: 0.35, character_threshold: 0.85, tag_strategy: "add" };
-                    if (keywordsInput) keywordsInput.value = "";
-                }
-                updateDatasetUI();
+                applyLoadedSettings(settingsRes);
             });
         });
     }
@@ -646,6 +415,8 @@
         }
     }
 
+
+
     // Connect via QWebChannel first, then setup all event listeners and fetch dataset
     new QWebChannel(qt.webChannelTransport, function(channel) {
         backend = channel.objects.backend;
@@ -671,7 +442,63 @@
             });
         }
 
-        // Programmatically bind UI header buttons to avoid inline event handlers
+        // Inside QWebChannel initialization / settings loading:
+        const e621ToggleCb = document.getElementById('e621-toggle-cb');
+        if (e621ToggleCb) {
+            e621ToggleCb.addEventListener('change', function() {
+                currentSettingsData.use_e621 = this.checked;
+                if (backend) {
+                    backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
+                }
+            });
+        }
+
+        // Inside browseFolder / fetchDataset after loading settings:
+        if (e621ToggleCb) {
+            e621ToggleCb.checked = !!currentSettingsData.use_e621;
+        }
+
+        // Inside tagInput autocomplete handler:
+        if (tagInput) {
+            tagInput.addEventListener('input', function() {
+                const val = this.value.trim().toLowerCase();
+                if (!val) {
+                    autoBox.style.display = 'none';
+                    return;
+                }
+
+                const useE621 = e621ToggleCb ? e621ToggleCb.checked : false;
+
+                if (useE621 && backend && typeof backend.getE621AutocompleteSuggestions === 'function') {
+                    // --- TOGGLE ON: Use e621 External Autocomplete ---
+                    backend.getE621AutocompleteSuggestions(val, function(response) {
+                        try {
+                            const matches = JSON.parse(response);
+                            renderAutocompleteItems(matches);
+                        } catch (e) {
+                            autoBox.style.display = 'none';
+                        }
+                    });
+                } else {
+                    // --- TOGGLE OFF: Use Internal Dataset Autocomplete ---
+                    fallbackLocalAutocomplete(val);
+                }
+            });
+
+            tagInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const val = this.value.trim().toLowerCase();
+                    if (val) {
+                        addTagToSelection(val);
+                        this.value = '';
+                        autoBox.style.display = 'none';
+                    }
+                } else if (e.key === 'Escape') {
+                    autoBox.style.display = 'none';
+                }
+            });
+        }
+
         document.getElementById('open-dataset-btn').addEventListener('click', browseFolder);
         document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
         document.getElementById('github-btn').addEventListener('click', () => {
@@ -691,15 +518,9 @@
         document.getElementById('sort-alpha-btn').addEventListener('click', () => sortActiveTags('alpha'));
         document.getElementById('sort-freq-btn').addEventListener('click', () => sortActiveTags('freq'));
 
-        document.getElementById('close-settings-x-btn').addEventListener('click', closeSettingsModal);
-        document.getElementById('close-settings-btn').addEventListener('click', closeSettingsModal);
-        document.getElementById('save-settings-btn').addEventListener('click', saveSettingsModal);
-        document.getElementById('reset-settings-btn').addEventListener('click', resetSettingsToDefaults);
-
         document.getElementById('close-help-x-btn').addEventListener('click', closeHelpModal);
         document.getElementById('close-help-btn').addEventListener('click', closeHelpModal);
 
-        document.getElementById('setting-model-name').addEventListener('change', onModelSelectedChange);
         document.getElementById('filter-input').addEventListener('input', onFilterInputChanged);
 
         // Fetch dataset upon successful channel connection
@@ -832,23 +653,11 @@
         updateSelectionStatusText();
     }
 
-    // function promptDeleteImage(event, originalIdx) {
-    //     event.stopPropagation();
-    //     const img = datasetImages[originalIdx];
-    //     if (!img || !confirm(`Delete "${img.filename}" and its .txt tags file?`)) return;
-    //
-    //     pushUndoState();
-    //     if (backend) backend.deleteImageAndTags(img.relative_path);
-    //     datasetImages.splice(originalIdx, 1);
-    //     applyFilter();
-    // }
-
     function promptDeleteImage(event, originalIdx) {
         event.stopPropagation();
         const img = datasetImages[originalIdx];
         if (!img || !backend) return;
 
-        // Call the fancy custom delete confirmation dialog in Python backend
         backend.confirmDeleteModal(img.filename, function(isConfirmed) {
             if (!isConfirmed) return;
 
@@ -992,11 +801,12 @@
             };
 
             item.onclick = (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.altKey) {
-                    removeFromKeywords(tag);
-                    e.stopPropagation();
-                } else if (e.ctrlKey || e.metaKey) {
-                    addToKeywords(tag);
+                if ((e.ctrlKey || e.metaKey)) {
+                    if (isKeyword) {
+                        removeFromKeywords(tag);
+                    } else {
+                        addToKeywords(tag);
+                    }
                     e.stopPropagation();
                 } else if (e.shiftKey && e.altKey) {
                     pushUndoState();
@@ -1013,14 +823,26 @@
                     renderGrid();
                     e.stopPropagation();
                 } else if (e.shiftKey) {
+                    // Shift + Click toggle across selected images
                     pushUndoState();
                     const targets = getSelectedIndices();
                     const updates = {};
+
+                    // Check if *all* targeted images already have this tag; if so, remove it. Otherwise, add it.
+                    const allHaveTag = targets.length > 0 && targets.every(idx => {
+                        return datasetImages[idx].tags.map(t => t.toLowerCase()).includes(tag.toLowerCase());
+                    });
+
                     targets.forEach(idx => {
                         const img = datasetImages[idx];
-                        addTagToImage(img, tag);
+                        if (allHaveTag) {
+                            img.tags = img.tags.filter(t => t.toLowerCase() !== tag.toLowerCase());
+                        } else {
+                            addTagToImage(img, tag);
+                        }
                         updates[img.relative_path] = img.tags.join(', ');
                     });
+
                     if (backend && targets.length > 0) backend.saveBatchImageTags(JSON.stringify(updates));
                     renderActiveTags();
                     renderGlobalTagsList();
@@ -1174,8 +996,25 @@
             });
 
             chip.onclick = (e) => {
-                if ((e.ctrlKey || e.metaKey) && e.altKey) removeFromKeywords(tag);
-                else if (e.ctrlKey || e.metaKey) addToKeywords(tag);
+                if ((e.ctrlKey || e.metaKey)) {
+                    if (isKeyword) {
+                        removeFromKeywords(tag);
+                    } else {
+                        addToKeywords(tag);
+                    }
+                } else if (e.shiftKey) {
+                    // Shift + Click toggle for selected image tags
+                    pushUndoState();
+                    if (img.tags.map(t => t.toLowerCase()).includes(tag.toLowerCase())) {
+                        img.tags = img.tags.filter(t => t.toLowerCase() !== tag.toLowerCase());
+                    } else {
+                        addTagToImage(img, tag);
+                    }
+                    if (backend) backend.saveImageTags(img.relative_path, img.tags.join(', '));
+                    renderActiveTags();
+                    renderGlobalTagsList();
+                    renderGrid();
+                }
                 e.stopPropagation();
             };
 
@@ -1372,60 +1211,6 @@
         renderGrid();
     }
 
-    // function triggerAutoTag() {
-    //     if (selectedImageIndex === null) {
-    //         alert("Please select an image first.");
-    //         return;
-    //     }
-    //
-    //     const targets = getSelectedIndices();
-    //     if (!confirm(`Run Local PyTorch AutoTag for ${targets.length} selected image(s)?`)) return;
-    //
-    //     pushUndoState();
-    //     const pathsToProcess = targets.map(idx => datasetImages[idx].relative_path).filter(p => p);
-    //     if (pathsToProcess.length === 0) return;
-    //
-    //     if (backend && typeof backend.autoTagBatch === 'function') {
-    //         backend.autoTagBatch(JSON.stringify(pathsToProcess), function(resultsJson) {
-    //             try {
-    //                 const results = JSON.parse(resultsJson);
-    //                 const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
-    //                 const strategy = currentSettingsData.tag_strategy || "add";
-    //
-    //                 targets.forEach(idx => {
-    //                     const img = datasetImages[idx];
-    //                     if (img && results[img.relative_path]) {
-    //                         const returnedTagsStr = results[img.relative_path];
-    //                         const newTags = returnedTagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
-    //
-    //                         if (strategy === "replace") {
-    //                             img.tags = cleanImageTags([...activeKeywords, ...newTags]);
-    //                         } else {
-    //                             const remainingExisting = img.tags.filter(t => !activeKeywords.includes(t.toLowerCase()));
-    //                             img.tags = cleanImageTags([...activeKeywords, ...newTags, ...remainingExisting]);
-    //                         }
-    //                     }
-    //                 });
-    //
-    //                 const batchUpdates = {};
-    //                 targets.forEach(idx => {
-    //                     const img = datasetImages[idx];
-    //                     if (img) batchUpdates[img.relative_path] = img.tags.join(', ');
-    //                 });
-    //                 if (Object.keys(batchUpdates).length > 0) {
-    //                     backend.saveBatchImageTags(JSON.stringify(batchUpdates));
-    //                 }
-    //
-    //                 renderActiveTags();
-    //                 renderGlobalTagsList();
-    //                 renderGrid();
-    //             } catch(e) {
-    //                 console.error("Batch tag processing response error:", e);
-    //             }
-    //         });
-    //     }
-    // }
-
     function triggerAutoTag() {
         if (selectedImageIndex === null) {
             alert("Please select an image first.");
@@ -1435,7 +1220,6 @@
         const targets = getSelectedIndices();
         if (targets.length === 0) return;
 
-        // Call the fancy custom confirmation dialog in Python backend
         backend.confirmAutoTagModal(targets.length, function(isConfirmed) {
             if (!isConfirmed) return;
 
@@ -1487,6 +1271,37 @@
 
     const tagInput = document.getElementById('tag-input');
     const autoBox = document.getElementById('autocomplete-box');
+    const e621ToggleCb = document.getElementById('e621-toggle-cb');
+
+    function renderAutocompleteItems(matches) {
+        if (!autoBox) return;
+        autoBox.innerHTML = '';
+        if (!matches || matches.length === 0) {
+            autoBox.style.display = 'none';
+            return;
+        }
+        matches.forEach(match => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.innerText = match;
+            div.onclick = () => {
+                // --- Automatically add tag on click without needing Enter ---
+                addTagToSelection(match);
+                tagInput.value = '';
+                autoBox.style.display = 'none';
+                tagInput.focus();
+            };
+            autoBox.appendChild(div);
+        });
+        autoBox.style.display = 'block';
+    }
+
+    function fallbackLocalAutocomplete(val) {
+        const allTags = new Set();
+        datasetImages.forEach(img => img.tags.forEach(t => allTags.add(t)));
+        const matches = Array.from(allTags).filter(t => t.toLowerCase().includes(val) && t.toLowerCase() !== val).slice(0, 6);
+        renderAutocompleteItems(matches);
+    }
 
     if (tagInput) {
         tagInput.addEventListener('input', function() {
@@ -1495,26 +1310,23 @@
                 autoBox.style.display = 'none';
                 return;
             }
-            const allTags = new Set();
-            datasetImages.forEach(img => img.tags.forEach(t => allTags.add(t)));
-            const matches = Array.from(allTags).filter(t => t.includes(val) && t !== val).slice(0, 6);
-            if (matches.length === 0) {
-                autoBox.style.display = 'none';
-                return;
+
+            const useE621 = e621ToggleCb ? e621ToggleCb.checked : false;
+
+            if (useE621 && backend && typeof backend.getE621AutocompleteSuggestions === 'function') {
+                // --- TOGGLE ON: Use e621 External Autocomplete ---
+                backend.getE621AutocompleteSuggestions(val, function(response) {
+                    try {
+                        const matches = JSON.parse(response);
+                        renderAutocompleteItems(matches);
+                    } catch (e) {
+                        autoBox.style.display = 'none';
+                    }
+                });
+            } else {
+                // --- TOGGLE OFF: Use Internal Dataset Autocomplete ---
+                fallbackLocalAutocomplete(val);
             }
-            autoBox.innerHTML = '';
-            matches.forEach(match => {
-                const div = document.createElement('div');
-                div.className = 'autocomplete-item';
-                div.innerText = match;
-                div.onclick = () => {
-                    tagInput.value = match;
-                    autoBox.style.display = 'none';
-                    tagInput.focus();
-                };
-                autoBox.appendChild(div);
-            });
-            autoBox.style.display = 'block';
         });
 
         tagInput.addEventListener('keydown', function(e) {
