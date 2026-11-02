@@ -623,6 +623,11 @@
                 <div class="badge-delete" title="Delete image & tags">×</div>
             `;
 
+            card.ondblclick = (e) => {
+                e.stopPropagation();
+                openBulkImageEditModal(originalIdx);
+            };
+
             const imgElement = card.querySelector('img');
             imgElement.addEventListener('error', () => {
                 imgElement.style.display = 'none';
@@ -651,6 +656,42 @@
             grid.appendChild(card);
         });
         updateSelectionStatusText();
+    }
+
+    function openBulkImageEditModal(originalIdx) {
+        const img = datasetImages[originalIdx];
+        if (!img || !backend) return;
+
+        const currentTagsStr = img.tags.join(', ');
+        const modalTitle = `Edit Tag / Caption: ${img.filename}`;
+
+        // Opens the native PyQt EditPromptDialog window
+        openEditTagModal(modalTitle, currentTagsStr, (newText) => {
+            pushUndoState();
+
+            const updatedTags = newText
+                .replace(/\n/g, ',')
+                .split(',')
+                .map(t => t.trim())
+                .filter(t => t.length > 0);
+
+            img.tags = cleanImageTags(updatedTags);
+
+            // Save changes to disk via backend bridge
+            if (backend && typeof backend.saveImageTags === 'function') {
+                backend.saveImageTags(img.relative_path, img.tags.join(', '));
+            }
+
+            // Refresh UI components
+            renderActiveTags();
+            renderGlobalTagsList();
+            renderGrid();
+
+            // Update selection if it matches
+            if (selectedImageIndex === originalIdx) {
+                selectImage(originalIdx, true);
+            }
+        });
     }
 
     function promptDeleteImage(event, originalIdx) {
