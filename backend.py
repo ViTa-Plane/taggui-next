@@ -5,7 +5,8 @@ from PySide6.QtCore import QObject, Slot, Signal, Property, QThread, QEventLoop,
 from PySide6.QtWidgets import (
     QFileDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
     QPushButton, QFrame, QComboBox, QSlider, QCheckBox, QSpinBox, QToolButton,
-    QGroupBox, QScrollArea, QWidget, QStackedWidget, QMessageBox, QInputDialog
+    QGroupBox, QScrollArea, QWidget, QStackedWidget, QMessageBox, QInputDialog,
+    QSizeGrip
 )
 from PySide6.QtGui import QIcon, QColor
 
@@ -82,7 +83,6 @@ class TaggingConfirmDialog(QDialog):
 
         main_layout.addWidget(card)
 
-
 class DeleteConfirmDialog(QDialog):
     def __init__(self, filename, parent=None):
         super().__init__(parent)
@@ -145,7 +145,6 @@ class DeleteConfirmDialog(QDialog):
         card_layout.addLayout(btn_layout)
 
         main_layout.addWidget(card)
-
 
 class TaggingProgressDialog(QDialog):
     def __init__(self, worker_ref=None, parent=None):
@@ -245,15 +244,19 @@ class CustomPromptDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("TagGUI Next - Add Custom Prompt")
-        self.resize(460, 220)
+        self.resize(480, 240)
+        self.setMinimumSize(400, 240)
         self.setModal(True)
 
-        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        # Enable window resize capability alongside frameless hint
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         icon_path = Path(__file__).parent / "assets" / "icon.png"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
+
+        self.dragPosition = None
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(12, 12, 12, 12)
@@ -325,6 +328,17 @@ class CustomPromptDialog(QDialog):
 
         main_layout.addWidget(card)
 
+        # Instantiate QSizeGrip as a direct child for bottom-right corner resizing
+        self.size_grip = QSizeGrip(self)
+        self.size_grip.setStyleSheet("background: transparent;")
+        self.size_grip.raise_()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        grip_size = 16
+        self.size_grip.setGeometry(self.width() - grip_size - 12, self.height() - grip_size - 12, grip_size, grip_size)
+        self.size_grip.raise_()
+
     # --- Window Dragging Handlers ---
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -348,9 +362,11 @@ class EditPromptDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("TagGUI Next - Edit")
         self.resize(480, 240)
+        self.setMinimumSize(400, 240)
         self.setModal(True)
 
-        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        # Enable window resize capability alongside frameless hint
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
         icon_path = Path(__file__).parent / "assets" / "icon.png"
@@ -411,7 +427,7 @@ class EditPromptDialog(QDialog):
         self.text_edit.setMinimumHeight(100)
         card_layout.addWidget(self.text_edit)
 
-        # Footer Buttons
+        # Footer Buttons (Clean layout without size grip inside it)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -429,8 +445,19 @@ class EditPromptDialog(QDialog):
 
         main_layout.addWidget(card)
 
-        # Focus and select text properly after render
+        # Instantiate QSizeGrip as a direct child of the dialog window
+        self.size_grip = QSizeGrip(self)
+        self.size_grip.setStyleSheet("background: transparent;")
+        self.size_grip.raise_()
+
         self.text_edit.setFocus()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Lock QSizeGrip to the bottom-right corner of the window
+        grip_size = 16
+        self.size_grip.setGeometry(self.width() - grip_size - 12, self.height() - grip_size - 12, grip_size, grip_size)
+        self.size_grip.raise_()
 
     # --- Window Dragging Handlers ---
     def mousePressEvent(self, event):
