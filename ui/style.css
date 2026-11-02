@@ -225,18 +225,22 @@ main { flex: 1; display: flex; flex-direction: column; background-color: var(--b
   background: rgba(239, 68, 68, 0.85);
   color: var(--text-white);
   font-weight: bold;
-  font-size: 10px;
+  font-size: 11px; /* <--- slightly crisp size */
   width: 18px;
   height: 18px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
+  line-height: 1; /* <--- Prevents vertical font metrics offset */
+  padding-bottom: 1px; /* <--- Pixel-level optical centering */
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s, background-color 0.15s;
   z-index: 10;
 }
+/*Setting `line-height: 1` and `padding-bottom: 1px` forces the `×` character to align perfectly in the exact optical center of the red circle badge.*/
+
 .image-card:hover .badge-delete { opacity: 1; }
 .badge-delete:hover { background: rgba(220, 38, 38, 1); }
 
