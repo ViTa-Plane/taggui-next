@@ -1,12 +1,20 @@
 import csv
 import gc
 import json
-from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
 from PySide6.QtCore import QThread, Signal
 from huggingface_hub import hf_hub_download
+
+# ==============================================================================
+#   DEBUG CONFIGURATION
+# ==============================================================================
+DEBUG_MODE = False  # Set to True for verbose logs, False for clean logs
+
+# ==============================================================================
+# MAIN AUTOTAGGER CLASS
+# ==============================================================================
 
 
 class AutoTagWorker(QThread):
@@ -33,6 +41,7 @@ class AutoTagWorker(QThread):
             character_mcut_enabled = self.settings.get("character_mcut_enabled", False)
             model_name = self.settings.get("model_name", "SmilingWolf/wd-eva02-large-tagger-v3")
             task_command = self.settings.get("task_command", "<CAPTION>")
+            tag_strategy = self.settings.get("tag_strategy", "add")
 
             device = "cuda" if torch.cuda.is_available() else "cpu"
             dtype = torch.float16 if device == "cuda" else torch.float32
@@ -232,22 +241,57 @@ class AutoTagWorker(QThread):
                         generated_text = ""
                         with torch.no_grad():
                             if "blip" in model_name.lower() and "blip2" not in model_name.lower():
-                                prompt = "A detailed, descriptive caption of this image with background details:"
+                                prompt = task_command if task_command else "A detailed, descriptive caption of this image with background details:"
                                 inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, dtype)
+
+                                max_new_tokens = self.settings.get("captioner_max_new_tokens", 150)
+                                min_length = self.settings.get("captioner_min_length", 30)
+                                do_sample = self.settings.get("captioner_do_sample", True)
+                                temperature = self.settings.get("captioner_temperature", 0.7)
+                                repetition_penalty = self.settings.get("captioner_repetition_penalty", 1.2)
+                                num_beams = self.settings.get("captioner_num_beams", 3)
+
                                 generated_ids = model.generate(
                                     **inputs,
-                                    max_new_tokens=150,
-                                    min_length=30,
-                                    do_sample=True,
-                                    temperature=0.7,
-                                    repetition_penalty=1.2,
-                                    num_beams=3
+                                    max_new_tokens=max_new_tokens,
+                                    min_length=min_length,
+                                    do_sample=do_sample,
+                                    temperature=temperature,
+                                    repetition_penalty=repetition_penalty,
+                                    num_beams=num_beams
                                 )
 
-                                # Slice off the input prompt token IDs so only the newly generated caption remains
                                 input_len = inputs["input_ids"].shape[1]
                                 generated_text = processor.batch_decode(
                                     generated_ids[:, input_len:],
+                                    skip_special_tokens=True
+                                )[0].strip()
+
+                            elif "blip2" in model_name.lower():
+                                prompt = task_command if task_command else "A detailed, descriptive caption of this image with background details:"
+                                if prompt:
+                                    inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, dtype)
+                                else:
+                                    inputs = processor(images=image, return_tensors="pt").to(device, dtype)
+
+                                max_new_tokens = self.settings.get("captioner_max_new_tokens", 150)
+                                min_length = self.settings.get("captioner_min_length", 30)
+                                do_sample = self.settings.get("captioner_do_sample", True)
+                                temperature = self.settings.get("captioner_temperature", 0.7)
+                                repetition_penalty = self.settings.get("captioner_repetition_penalty", 1.2)
+                                num_beams = self.settings.get("captioner_num_beams", 3)
+
+                                generated_ids = model.generate(
+                                    **inputs,
+                                    max_new_tokens=max_new_tokens,
+                                    min_length=min_length,
+                                    do_sample=do_sample,
+                                    temperature=temperature,
+                                    repetition_penalty=repetition_penalty,
+                                    num_beams=num_beams
+                                )
+                                generated_text = processor.batch_decode(
+                                    generated_ids,
                                     skip_special_tokens=True
                                 )[0].strip()
 
@@ -258,11 +302,14 @@ class AutoTagWorker(QThread):
                                 if not inputs or "pixel_values" in inputs and inputs["pixel_values"] is None:
                                     self.log_signal.emit(f"[Backend] Skipping {rel_path}: Processor failed extraction.")
                                     continue
+                                max_new_tokens = self.settings.get("captioner_max_new_tokens", 150)
+                                num_beams = self.settings.get("captioner_num_beams", 3)
+
                                 generated_ids = model.generate(
                                     input_ids=inputs["input_ids"],
                                     pixel_values=inputs["pixel_values"],
-                                    max_new_tokens=1024,
-                                    num_beams=3,
+                                    max_new_tokens=max_new_tokens,  # <--- Dynamic
+                                    num_beams=num_beams,            # <--- Dynamic
                                     use_cache=False
                                 )
                                 raw_text = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
@@ -281,7 +328,7 @@ class AutoTagWorker(QThread):
                                 generated_text = model.answer_question(enc_image, "Describe this image concisely.",
                                                                        processor)
 
-                            # --- ADD THIS QWEN GENERATION BLOCK HERE ---
+                            # --- QWEN GENERATION BLOCK WITH SETTINGS ---
                             elif "qwen" in model_name.lower():
                                 prompt = task_command if task_command else "Write a descriptive caption for this image."
                                 convo = [
@@ -308,11 +355,22 @@ class AutoTagWorker(QThread):
                                 if "pixel_values" in inputs and inputs["pixel_values"] is not None:
                                     inputs["pixel_values"] = inputs["pixel_values"].to(dtype)
 
+                                # retrieve values from settings dialog and pass them directly into model.generate(...)
+                                thinking_mode = self.settings.get("thinking_mode", False)
+                                temperature = self.settings.get("temperature", 0.6 if thinking_mode else 0.7)
+                                top_p = self.settings.get("top_p", 0.95 if thinking_mode else 0.8)
+                                top_k = self.settings.get("top_k", 20)
+                                max_new_tokens = self.settings.get("qwen_max_new_tokens", 256)
+                                min_new_tokens = self.settings.get("qwen_min_new_tokens", 10)
+
                                 output_ids = model.generate(
                                     **inputs,
-                                    max_new_tokens=256,
+                                    max_new_tokens=max_new_tokens,
+                                    min_new_tokens=min_new_tokens,
                                     do_sample=True,
-                                    temperature=0.6
+                                    temperature=temperature,
+                                    top_p=top_p,
+                                    top_k=top_k
                                 )
 
                                 input_len = inputs["input_ids"].shape[1]
@@ -322,8 +380,6 @@ class AutoTagWorker(QThread):
                                 )
                                 generated_text = decoded_outputs[0].strip() if decoded_outputs else ""
                             # ---------------------------------------------
-
-
 
                             elif "joycaption" in model_name.lower() or "llava" in model_name.lower():
                                 prompt = task_command if task_command else "Write a descriptive caption for this image."
@@ -359,11 +415,22 @@ class AutoTagWorker(QThread):
                                 if "pixel_values" in inputs and inputs["pixel_values"] is not None:
                                     inputs["pixel_values"] = inputs["pixel_values"].to(dtype)
 
+                                # Pull configuration from settings dialog (consistent with Qwen)
+                                thinking_mode = self.settings.get("thinking_mode", False)
+                                temperature = self.settings.get("temperature", 0.6 if thinking_mode else 0.7)
+                                top_p = self.settings.get("top_p", 0.95 if thinking_mode else 0.8)
+                                top_k = self.settings.get("top_k", 20)
+                                max_new_tokens = self.settings.get("qwen_max_new_tokens", 256)
+                                min_new_tokens = self.settings.get("qwen_min_new_tokens", 10)
+
                                 output_ids = model.generate(
                                     **inputs,
-                                    max_new_tokens=256,
+                                    max_new_tokens=max_new_tokens,
+                                    min_new_tokens=min_new_tokens,
                                     do_sample=True,
-                                    temperature=0.6
+                                    temperature=temperature,
+                                    top_p=top_p,
+                                    top_k=top_k
                                 )
 
                                 input_len = inputs["input_ids"].shape[1]
@@ -422,10 +489,34 @@ class AutoTagWorker(QThread):
 
                     if tags_str:
                         txt_path = img_path.with_suffix(".txt")
-                        txt_path.write_text(tags_str, encoding="utf-8")
-                        results[rel_path] = tags_str
+
+                        # Keep a reference to what the model newly generated for clean logging
+                        newly_generated_str = tags_str
+                        file_tags_str = tags_str
+
+                        # --- FIX: Honor tag_strategy ("add" vs "replace") ---
+                        if tag_strategy == "add" and txt_path.exists():
+                            existing_content = txt_path.read_text(encoding="utf-8").strip()
+                            if existing_content:
+                                if "," in existing_content or "," in tags_str:
+                                    old_tags = [t.strip() for t in existing_content.replace("\n", ",").split(",") if t.strip()]
+                                    new_tags = [t.strip() for t in tags_str.replace("\n", ",").split(",") if t.strip()]
+                                    combined_tags = old_tags + [t for t in new_tags if t not in old_tags]
+                                    file_tags_str = ", ".join(combined_tags)
+                                else:
+                                    file_tags_str = f"{existing_content} {tags_str}"
+                        else:
+                            # Strategy is "replace" (or file doesn't exist) — keep freshly generated tags/caption as-is
+                            file_tags_str = tags_str
+                        # --------------------------------------------------
+
+                        # Write the tags/caption to disk
+                        txt_path.write_text(file_tags_str, encoding="utf-8")
+                        results[rel_path] = file_tags_str
+
+                        # Report ONLY the new entry in the backend log window
                         self.log_signal.emit(
-                            f"[Backend] ({i + 1}/{len(self.paths)}) Processed {img_path.name}: {tags_str}"
+                            f"[Backend] ({i + 1}/{len(self.paths)}) Processed {img_path.name}: {newly_generated_str}"
                         )
 
                 except Exception as img_err:
