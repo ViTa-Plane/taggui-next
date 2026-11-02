@@ -633,6 +633,19 @@ class SettingsDialog(QDialog):
         qwen_layout = QVBoxLayout(self.qwen_group)
         qwen_layout.setSpacing(10)
 
+        # Task Command / Prompt Mode for Qwen
+        qwen_layout.addWidget(QLabel("Task Command / Prompt Mode"))
+        qwen_cmd_row = QHBoxLayout()
+        self.qwen_task_cmd_combo = QComboBox()
+        self.qwen_task_cmd_combo.setStyleSheet("background-color: #181a24; color: #e2e8f0;")
+        qwen_cmd_row.addWidget(self.qwen_task_cmd_combo, stretch=1)
+
+        self.qwen_add_custom_btn = QPushButton("Add Custom")
+        self.qwen_add_custom_btn.setObjectName("cancelBtn")
+        self.qwen_add_custom_btn.clicked.connect(self.add_custom_prompt)
+        qwen_cmd_row.addWidget(self.qwen_add_custom_btn)
+        qwen_layout.addLayout(qwen_cmd_row)
+
         self.thinking_cb = QCheckBox("Enable Thinking Mode (Temp: 0.6, Top-P: 0.95)")
         self.thinking_cb.setChecked(self.settings_data.get("thinking_mode", False))
         self.thinking_cb.stateChanged.connect(self.on_thinking_toggled)
@@ -687,18 +700,7 @@ class SettingsDialog(QDialog):
         self.qwen_min_tokens_spin.setValue(int(self.settings_data.get("qwen_min_new_tokens", 10)))
         qwen_layout.addWidget(self.qwen_min_tokens_spin)
 
-        # Task Command / Prompt Mode for Qwen
-        qwen_layout.addWidget(QLabel("Task Command / Prompt Mode"))
-        qwen_cmd_row = QHBoxLayout()
-        self.qwen_task_cmd_combo = QComboBox()
-        self.qwen_task_cmd_combo.setStyleSheet("background-color: #181a24; color: #e2e8f0;")
-        qwen_cmd_row.addWidget(self.qwen_task_cmd_combo, stretch=1)
-
-        self.qwen_add_custom_btn = QPushButton("Add Custom")
-        self.qwen_add_custom_btn.setObjectName("cancelBtn")
-        self.qwen_add_custom_btn.clicked.connect(self.add_custom_prompt)
-        qwen_cmd_row.addWidget(self.qwen_add_custom_btn)
-        qwen_layout.addLayout(qwen_cmd_row)
+        qwen_layout.addStretch(1)  # Pushes all visible controls to the top
 
         self.settings_stack.addWidget(self.qwen_group)
 
