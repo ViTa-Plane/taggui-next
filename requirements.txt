@@ -9,7 +9,14 @@ huggingface_hub
 timm
 einops
 
-# PyTorch CUDA 13.0 wheel repository
+# PyTorch Configuration
+# ----------------------------------------------------------------------
+# The configuration below targets CUDA 13.0. 
+# If you are on a different system, swap out the repository line:
+#   - CUDA 12.x:      Change to --extra-index-url https://download.pytorch.org/whl/cu121 (or cu124/cu126)
+#   - CPU-only:       Replace with --index-url https://download.pytorch.org/whl/cpu
+#   - Apple Silicon:  Remove the extra-index-url entirely (pip installs MPS-compatible torch by default)
+# ----------------------------------------------------------------------
 --extra-index-url https://download.pytorch.org/whl/cu130
 torch==2.14.1
 torchvision==0.29.1

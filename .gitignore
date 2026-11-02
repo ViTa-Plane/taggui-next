@@ -189,3 +189,5 @@ backup_script.py
 /backup
 /tmp
 /sample_dataset
+assets/settings.json
+start_backup_script.py
