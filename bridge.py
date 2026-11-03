@@ -15,6 +15,7 @@ from huggingface_hub.constants import HF_HUB_CACHE
 from autotagger import AutoTagWorker
 from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, EditPromptDialog
 
+# version = 1.2.1
 
 # ==============================================================================
 #  DEBUG CONFIGURATION
@@ -266,7 +267,9 @@ class TagGUIBridge(QObject):
         joycaption_names = [
             "fancyfeast/llama-joycaption-alpha-two-hf-llava",
             "fancyfeast/llama-joycaption-beta-one-hf-llava",
-            "NeoChen1024/llama-joycaption-beta-one-hf-llava-FP8-Dynamic"
+            "NeoChen1024/llama-joycaption-beta-one-hf-llava-FP8-Dynamic",
+            "NeoChen1024/llama-joycaption-beta-one-hf-llava-GPTQ-4bit-sym-autoround",
+            "mradermacher/llama-joycaption-beta-one-hf-llava-GGUF"
         ]
 
         florence2_names = [
@@ -287,12 +290,21 @@ class TagGUIBridge(QObject):
             "DreamFast/qwen3-4b-heretic"
         ]
 
+        minicpm_names = [
+            "openbmb/MiniCPM-V-2_6-int4",
+        ]
+
+        internlm_names = [
+            "internlm/internlm-xcomposer2-vl-7b-4bit",
+        ]
+
         results = []
         for name, thresh in wd_taggers:
             installed = self._is_hf_model_downloaded(name)
             results.append({
                 "id": name,
-                "name": f"{'[Installed] ' if installed else ''}{name}",
+                # "name": f"{'[Installed] ' if installed else ''}{name}",
+                "name": name,
                 "category": "tagger",
                 "family": "SmilingWolf WD Tagger",
                 "default_threshold": thresh,
@@ -308,7 +320,8 @@ class TagGUIBridge(QObject):
             ]
             results.append({
                 "id": name,
-                "name": f"{'[Installed] ' if installed else ''}{name}",
+                # "name": f"{'[Installed] ' if installed else ''}{name}",
+                "name": name,
                 "category": "captioner",
                 "family": "BLIP",
                 "commands": blip_commands,
@@ -324,7 +337,8 @@ class TagGUIBridge(QObject):
             ]
             results.append({
                 "id": name,
-                "name": f"{'[Installed] ' if installed else ''}{name}",
+                # "name": f"{'[Installed] ' if installed else ''}{name}",
+                "name": name,
                 "category": "captioner",
                 "family": "BLIP-2",
                 "commands": blip2_commands,
@@ -338,7 +352,8 @@ class TagGUIBridge(QObject):
                                                                   "<MORE_DETAILED_CAPTION>"]
             results.append({
                 "id": name,
-                "name": f"{'[Installed] ' if installed else ''}{name}",
+                # "name": f"{'[Installed] ' if installed else ''}{name}",
+                "name": name,
                 "category": "florence2",
                 "family": "Florence-2",
                 "commands": commands,
@@ -349,7 +364,8 @@ class TagGUIBridge(QObject):
             installed = self._is_hf_model_downloaded(name)
             results.append({
                 "id": name,
-                "name": f"{'[Installed] ' if installed else ''}{name}",
+                # "name": f"{'[Installed] ' if installed else ''}{name}",
+                "name": name,
                 "category": "moondream",
                 "family": "Moondream2",
                 "commands": ["Short_caption", "Normal_caption", "Visual_query", "Object_detection", "Pointing"],
@@ -366,7 +382,8 @@ class TagGUIBridge(QObject):
             ]
             results.append({
                 "id": name,
-                "name": f"{'[Installed] ' if installed else ''}{name}",
+                # "name": f"{'[Installed] ' if installed else ''}{name}",
+                "name": name,
                 "category": "qwen",
                 "family": "Qwen-VL",
                 "commands": commands,
@@ -382,10 +399,39 @@ class TagGUIBridge(QObject):
             ]
             results.append({
                 "id": name,
-                "name": f"{'[Installed] ' if installed else ''}{name}",
+                # "name": f"{'[Installed] ' if installed else ''}{name}",
+                "name": name,
                 "category": "captioner",
                 "family": "JoyCaption",
                 "commands": joycaption_commands,
+                "installed": installed
+            })
+
+        for name in minicpm_names:
+            installed = self._is_hf_model_downloaded(name)
+            minicpm_commands = [
+                "What is in the image?",
+            ]
+            results.append({
+                "id": name,
+                "name": name,
+                "category": "minicpm",
+                "family": "MiniCPM ",
+                "commands": minicpm_commands,
+                "installed": installed
+            })
+
+        for name in internlm_names:
+            installed = self._is_hf_model_downloaded(name)
+            internlm_commands = [
+                "Please describe this image in detail.",
+            ]
+            results.append({
+                "id": name,
+                "name": name,
+                "category": "internlm",
+                "family": "InternLM ",
+                "commands": internlm_commands,
                 "installed": installed
             })
 

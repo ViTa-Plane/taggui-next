@@ -1,7 +1,7 @@
 cls
 @echo off
 
-set ENV_DIR=python_embeded
+set ENV_DIR=.venv
 @echo activate virtual environment
 call .\%ENV_DIR%\Scripts\deactivate.bat
 call .\%ENV_DIR%\Scripts\activate.bat

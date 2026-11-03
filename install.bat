@@ -1,6 +1,6 @@
 cls
 @echo off
-set ENV_DIR=python_embeded
+set ENV_DIR=.venv
 
 if exist %ENV_DIR% (
   @echo python embeded is already installed

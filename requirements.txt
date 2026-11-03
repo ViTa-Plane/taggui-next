@@ -4,24 +4,42 @@ pillow
 requests
 numpy
 huggingface_hub
+hf_xet
 
 # Model Architectures & Computer Vision
 timm
 einops
 
+# ==============================================================================
 # PyTorch Configuration
-# ----------------------------------------------------------------------
+# ==============================================================================
 # The configuration below targets CUDA 13.0. 
+# run cuda_check.bat or cuda_check.sh to check your CUDA version
 # If you are on a different system, swap out the repository line:
 #   - CUDA 12.x:      Change to --extra-index-url https://download.pytorch.org/whl/cu121 (or cu124/cu126)
 #   - CPU-only:       Replace with --index-url https://download.pytorch.org/whl/cpu
 #   - Apple Silicon:  Remove the extra-index-url entirely (pip installs MPS-compatible torch by default)
 # ----------------------------------------------------------------------
+
+# --extra-index-url https://download.pytorch.org/whl/cu121
+# --extra-index-url https://download.pytorch.org/whl/cu124
+# --extra-index-url https://download.pytorch.org/whl/cu126
 --extra-index-url https://download.pytorch.org/whl/cu130
+
 torch==2.14.1
 torchvision==0.29.1
+
 compressed-tensors
 accelerate
 
+# ==============================================================================
+# transformers
 # use pre-v5 release where Florence-2's remote code was natively aligned
+# transformers==4.57.6
+# ==============================================================================
+
 transformers==4.57.6
+
+
+# sentencepiece==0.1.99 --only-binary :all:
+# bitsandbytes==0.43.1

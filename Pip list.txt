@@ -1,5 +1,5 @@
 activate virtual environment
-(python_embeded) E:\GitHub\taggui-next>pip list
+(.venv) E:\GitHub\taggui-next>pip list
 Package            Version
 ------------------ ------------
 accelerate         1.15.0
@@ -9,8 +9,9 @@ charset-normalizer 3.5.2
 colorama           0.4.6
 compressed-tensors 0.20.1
 einops             0.8.2
-filelock           4.2.5
+filelock           4.2.7
 fsspec             2026.9.0
+hf-xet             1.8.0
 huggingface_hub    0.36.2
 idna               3.20
 Jinja2             3.1.6
@@ -21,7 +22,7 @@ networkx           3.7
 numpy              2.5.4
 packaging          26.3
 pillow             13.0.0
-pip                26.2.2
+pip                26.3
 psutil             7.2.2
 pydantic           2.14.2
 pydantic_core      2.50.2

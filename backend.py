@@ -10,10 +10,37 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon, QColor
 
+# version = 1.2.1
+
 # ==============================================================================
 #   DEBUG CONFIGURATION
 # ==============================================================================
 DEBUG_MODE = False  # Set to True for verbose logs, False for clean logs
+
+
+class EditableComboBox(QComboBox):
+    def __init__(self, parent=None, settings_dialog=None):
+        super().__init__(parent)
+        self.settings_dialog = settings_dialog
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.open_edit_dialog)
+
+    def open_edit_dialog(self, pos):
+        current_text = self.currentText()
+        if not current_text:
+            return
+
+        dialog = EditPromptDialog("Edit Task Command", current_text, parent=self.settings_dialog)
+        if dialog.exec() == QDialog.Accepted:
+            new_text = dialog.get_edited_text()
+            if new_text:
+                if "custom_commands" not in self.settings_dialog.settings_data:
+                    self.settings_dialog.settings_data["custom_commands"] = []
+                if new_text not in self.settings_dialog.settings_data["custom_commands"]:
+                    self.settings_dialog.settings_data["custom_commands"].append(new_text)
+
+                self.settings_dialog.update_visibility()
+                self.setCurrentText(new_text)
 
 
 # ==============================================================================
@@ -83,6 +110,21 @@ class TaggingConfirmDialog(QDialog):
 
         main_layout.addWidget(card)
 
+    # --- Window Dragging Handlers ---
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self.dragPosition is not None:
+            self.move(event.globalPosition().toPoint() - self.dragPosition)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.dragPosition = None
+        event.accept()
+
 class DeleteConfirmDialog(QDialog):
     def __init__(self, filename, parent=None):
         super().__init__(parent)
@@ -145,6 +187,21 @@ class DeleteConfirmDialog(QDialog):
         card_layout.addLayout(btn_layout)
 
         main_layout.addWidget(card)
+
+    # --- Window Dragging Handlers ---
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self.dragPosition is not None:
+            self.move(event.globalPosition().toPoint() - self.dragPosition)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.dragPosition = None
+        event.accept()
 
 class TaggingProgressDialog(QDialog):
     def __init__(self, worker_ref=None, parent=None):
@@ -239,6 +296,20 @@ class TaggingProgressDialog(QDialog):
         self.close_btn.setEnabled(True)
         self.setWindowFlags(self.windowFlags() | Qt.WindowCloseButtonHint)
         self.show()
+    # --- Window Dragging Handlers ---
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self.dragPosition is not None:
+            self.move(event.globalPosition().toPoint() - self.dragPosition)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.dragPosition = None
+        event.accept()
 
 class CustomPromptDialog(QDialog):
     def __init__(self, parent=None):
@@ -477,11 +548,9 @@ class EditPromptDialog(QDialog):
     def get_edited_text(self):
         return self.text_edit.toPlainText().strip()
 
-
 # ------------------------------------
 # Settings Dialog UI & Save Logic
 # -------------------------------------
-
 class SettingsDialog(QDialog):
     def __init__(self, current_settings, available_interrogators, parent=None):
         super().__init__(parent)
@@ -636,7 +705,7 @@ class SettingsDialog(QDialog):
         # Task Command / Prompt Mode for Qwen
         qwen_layout.addWidget(QLabel("Task Command / Prompt Mode"))
         qwen_cmd_row = QHBoxLayout()
-        self.qwen_task_cmd_combo = QComboBox()
+        self.qwen_task_cmd_combo = EditableComboBox(settings_dialog=self)
         self.qwen_task_cmd_combo.setStyleSheet("background-color: #181a24; color: #e2e8f0;")
         qwen_cmd_row.addWidget(self.qwen_task_cmd_combo, stretch=1)
 
@@ -755,7 +824,7 @@ class SettingsDialog(QDialog):
         captioner_layout.addWidget(QLabel("Task Command / Prompt Mode"))
 
         captioner_cmd_row = QHBoxLayout()
-        self.captioner_task_cmd_combo = QComboBox()
+        self.captioner_task_cmd_combo = EditableComboBox(settings_dialog=self)
         self.captioner_task_cmd_combo.setStyleSheet("background-color: #181a24; color: #e2e8f0;")
         captioner_cmd_row.addWidget(self.captioner_task_cmd_combo, stretch=1)
 
@@ -959,11 +1028,19 @@ class SettingsDialog(QDialog):
 
         # Build unified command list (Model Defaults + Saved Custom Prompts)
         cmds = list(default_cmds)
-        customs = self.settings_data.get("custom_commands", [])
 
-        for c in customs:
-            if c not in cmds:
-                cmds.append(c)
+        # Filter out custom prompts for models that do not support them (e.g., Florence-2, Moondream2)
+        supports_custom_prompts = category not in ["florence2", "moondream"] and family_name.lower() not in [
+            "florence-2", "moondream2"]
+
+        if supports_custom_prompts:
+            customs = self.settings_data.get("custom_commands", [])
+            for c in customs:
+                if c not in cmds:
+                    cmds.append(c)
+        # Toggle visibility/enabled state for Add Custom buttons based on model support
+        if hasattr(self, "captioner_add_custom_btn"):
+            self.captioner_add_custom_btn.setVisible(supports_custom_prompts)
 
         if category in ["qwen", "joycaption", "llama"]:
             self.settings_stack.setCurrentWidget(self.qwen_group)
@@ -1028,6 +1105,21 @@ class SettingsDialog(QDialog):
             self.tagger_group.setVisible(False)
             self.captioner_group.setVisible(False)
 
+    # --- Window Dragging Handlers ---
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self.dragPosition is not None:
+            self.move(event.globalPosition().toPoint() - self.dragPosition)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.dragPosition = None
+        event.accept(
+)
 
     # -------------------------------------------------------
     #           Update Settings

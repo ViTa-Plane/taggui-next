@@ -191,3 +191,5 @@ backup_script.py
 /sample_dataset
 assets/settings.json
 start_backup_script.py
+update_version.py
+clean_cache.py

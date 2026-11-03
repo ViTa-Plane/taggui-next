@@ -7,6 +7,8 @@ from PIL import Image
 from PySide6.QtCore import QThread, Signal
 from huggingface_hub import hf_hub_download
 
+# version = 1.2.1
+
 # ==============================================================================
 #   DEBUG CONFIGURATION
 # ==============================================================================
@@ -496,11 +498,13 @@ class AutoTagWorker(QThread):
 
                         # --- FIX: Honor tag_strategy ("add" vs "replace") ---
                         if tag_strategy == "add" and txt_path.exists():
-                            existing_content = txt_path.read_text(encoding="utf-8").strip()
+                            existing_content = str(txt_path.read_text(encoding="utf-8")).strip()
                             if existing_content:
-                                if "," in existing_content or "," in tags_str:
-                                    old_tags = [t.strip() for t in existing_content.replace("\n", ",").split(",") if t.strip()]
-                                    new_tags = [t.strip() for t in tags_str.replace("\n", ",").split(",") if t.strip()]
+                                if "," in existing_content or "," in str(tags_str):
+                                    old_tags = [t.strip() for t in str(existing_content).replace("\n", ",").split(",")
+                                                if t.strip()]
+                                    new_tags = [t.strip() for t in str(tags_str).replace("\n", ",").split(",") if
+                                                t.strip()]
                                     combined_tags = old_tags + [t for t in new_tags if t not in old_tags]
                                     file_tags_str = ", ".join(combined_tags)
                                 else:
