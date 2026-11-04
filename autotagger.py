@@ -7,7 +7,7 @@ from PIL import Image
 from PySide6.QtCore import QThread, Signal
 from huggingface_hub import hf_hub_download
 
-# version = 1.2.18
+# version = 1.2.19
 
 # ==============================================================================
 #   DEBUG CONFIGURATION

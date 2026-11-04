@@ -11,7 +11,7 @@ from PySide6.QtGui import QIcon
 
 from bridge import TagGUIBridge
 
-# version = 1.2.3
+# version = 1.2.4
 
 #  supress third party Syntax Warnings
 warnings.filterwarnings("ignore", category=SyntaxWarning)
