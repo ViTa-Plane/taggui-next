@@ -3,7 +3,7 @@ import sys
 import warnings
 import json
 from pathlib import Path
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QUrl, Qt
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QApplication, QMainWindow
@@ -11,7 +11,7 @@ from PySide6.QtGui import QIcon
 
 from bridge import TagGUIBridge
 
-# version = 1.2.1
+# version = 1.2.3
 
 #  supress third party Syntax Warnings
 warnings.filterwarnings("ignore", category=SyntaxWarning)
@@ -40,6 +40,10 @@ class MainWindow(QMainWindow):
     # Setup Web Engine View
     self.web_view = QWebEngineView(self)
     self.web_view.page().setWebChannel(self.channel)
+    
+    # --- DISABLE CHROMIUM CONTEXT MENU AT WEBENGINE LEVEL ---
+    self.web_view.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+    # --------------------------------------------------------
 
     # Point correctly to ./ui/frontend.html
     html_path = (Path(__file__).parent / "ui" / "frontend.html").resolve()
