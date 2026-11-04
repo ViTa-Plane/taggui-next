@@ -12,7 +12,7 @@
  - [Moondream2](https://huggingface.co/vikhyatk/moondream2)
  - All WD Tagger models [SmilingWolf's](https://huggingface.co/SmilingWolf)
   ## untested/fail
- - Llama JoyCaption Beta One [Llama JoyCaption](https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava)
+ - All Llama JoyCaption VLM models [Llama JoyCaption](https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava)
 
 ---
 
