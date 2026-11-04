@@ -193,3 +193,4 @@ assets/settings.json
 start_backup_script.py
 update_version.py
 clean_cache.py
+run python embeded.bat
