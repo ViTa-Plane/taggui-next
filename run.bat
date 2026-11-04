@@ -6,5 +6,5 @@ set ENV_DIR=.venv
 call .\%ENV_DIR%\Scripts\deactivate.bat
 call .\%ENV_DIR%\Scripts\activate.bat
 
-@echo start TagGUI Next
+@echo start TagGUI-Next
 main.py
