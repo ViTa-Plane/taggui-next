@@ -1,4 +1,4 @@
-<!--version = 1.2.1 -->
+<!--version = 1.2.47 -->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -86,15 +86,17 @@
       </div>
 
       <div class="container-pad" style="border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
-        <input id="keywords-input" type="text" aria-label="Dataset training keywords" placeholder="Keywords (comma-separated, prepends)..." class="text-input" autocomplete="off" />
+        <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 6px;">
+<!--          <select id="keywords-combo" class="text-input" aria-label="Dataset keyword groups" style="flex: 1; cursor: pointer; background-color: #181a24; color: #38bdf8; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 4px 8px; font-size: 11px; max-height: 26px;"></select>-->
+          <select id="keywords-combo" class="text-input" aria-label="Dataset keyword groups" title="right click to Manage Keyword Groups"></select>
+        </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
-          <span style="font-size: 9px; color: #64748b; font-family: monospace;">Prepends & sorts</span>
+          <span style="font-size: 9px; color: #64748b; font-family: monospace;">Keywords:</span>
           <div style="display: flex; gap: 6px;">
-            <div style="display: flex; gap: 6px;">
-              <button id="move-front-btn" class="action-sm-btn" title="Move matching existing keywords to the front of the tag list">Move to Front</button>
-              <button id="apply-keywords-btn" class="action-sm-btn" title="Apply keywords to current selection (Enter)">Apply</button>
-              <button id="apply-all-keywords-btn" class="action-sm-btn" title="Apply keywords to all pictures in dataset">Apply to All</button>
-            </div>
+            <button id="edit-keywords-groups-btn" class="action-sm-btn" title="Manage Keyword Groups">Edit</button>
+            <button id="move-front-btn" class="action-sm-btn" title="Move matching existing keywords to the front of the tag list">Move to Front</button>
+            <button id="apply-keywords-btn" class="action-sm-btn" title="Apply keywords to current selection (Enter)">Apply</button>
+            <button id="apply-all-keywords-btn" class="action-sm-btn" title="Apply keywords to all pictures in dataset">Apply to All</button>
           </div>
         </div>
       </div>
@@ -173,13 +175,14 @@
 
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
   <script>
+
     let backend = null;
     let datasetImages = [];
     let filteredImages = [];
     let selectedImageIndex = null;
     let multiSelectedIndices = new Set();
     let lastClickedIndex = null;
-    let keywordsInput = null;
+    let keywordsCombo = null;
     let selectedLeftTag = null;
     let availableInterrogators = [];
 
@@ -189,6 +192,10 @@
 
     let currentSettingsData = {
         keywords: "",
+        keyword_groups: {
+            "general": ["masterpiece", "best quality"],
+            "characters": ["1girl", "solo"]
+        },
         model_name: "SmilingWolf/wd-eva02-large-tagger-v3",
         general_threshold: 0.35,
         character_threshold: 0.85,
@@ -263,15 +270,75 @@
         return false;
     }
 
+    function fetchDatasetSettings() {
+        if (!backend) return;
+        backend.getDatasetSettings(function(settingsRes) {
+            applyLoadedSettings(settingsRes);
+        });
+    }
+
     function applyLoadedSettings(settingsRes) {
         try {
             currentSettingsData = JSON.parse(settingsRes);
-            if (keywordsInput) keywordsInput.value = currentSettingsData.keywords || "";
+            
+            if (keywordsCombo) {
+                const groups = currentSettingsData.keyword_groups || { "general": ["masterpiece", "best quality"], "characters": ["1girl", "solo"] };
+
+                // --- FIX: Store both the selected index and selected group key before rebuilding ---
+                const selectedIdx = keywordsCombo.selectedIndex;
+                let activeGroupKey = null;
+
+                if (keywordsCombo.options.length > 0 && selectedIdx >= 0) {
+                    const groupNames = Object.keys(groups);
+                    if (selectedIdx < groupNames.length) {
+                        activeGroupKey = groupNames[selectedIdx];
+                    }
+                }
+                // ---------------------------------------------------------------------------------
+
+                let optionsHTML = '';
+                let firstSelectableVal = '';
+                let firstValidFound = false;
+                let restoredVal = null;
+
+                const groupEntries = Object.entries(groups);
+                groupEntries.forEach(([groupName, tagsList], index) => {
+                    const groupLabel = groupName.charAt(0).toUpperCase() + groupName.slice(1);
+                    const tagsStr = Array.isArray(tagsList) ? tagsList.join(', ') : tagsList;
+
+                    optionsHTML += `<option value="${tagsStr}" style="color: #cbd5e1; background: #181a24;"><span style="color: #16a47e; font-weight: bold;">${groupLabel}</span>: ${tagsStr}</option>`;
+
+                    if (!firstValidFound) {
+                        firstSelectableVal = tagsStr;
+                        firstValidFound = true;
+                    }
+
+                    // If this entry matches the group key that was active before editing, mark its new updated value to restore
+                    if (activeGroupKey && groupName.toLowerCase() === activeGroupKey.toLowerCase()) {
+                        restoredVal = tagsStr;
+                    }
+                });
+
+                // Batch update DOM
+                keywordsCombo.innerHTML = optionsHTML;
+
+                // --- FIX: Restore selection by matched group key or fallback safely ---
+                if (restoredVal !== null) {
+                    keywordsCombo.value = restoredVal;
+                } else if (currentSettingsData.keywords && Array.from(keywordsCombo.options).some(opt => opt.value === currentSettingsData.keywords)) {
+                    keywordsCombo.value = currentSettingsData.keywords;
+                } else if (firstSelectableVal) {
+                    keywordsCombo.value = firstSelectableVal;
+                }
+
+                // Save updated value back to current settings
+                currentSettingsData.keywords = keywordsCombo.value;
+                // ---------------------------------------------------------------------
+            }
+
             if (e621ToggleCb) e621ToggleCb.checked = !!currentSettingsData.use_e621;
         } catch(e) {
-            currentSettingsData = { keywords: "", general_threshold: 0.35, character_threshold: 0.85, tag_strategy: "add", use_e621: false };
-            if (keywordsInput) keywordsInput.value = "";
-            if (e621ToggleCb) e621ToggleCb.checked = false;
+            currentSettingsData = { keywords: "", keyword_groups: {}, use_e621: false };
         }
         updateDatasetUI();
     }
@@ -291,9 +358,7 @@
             selectedLeftTag = null;
             undoStack = [];
 
-            backend.getDatasetSettings(function(settingsRes) {
-                applyLoadedSettings(settingsRes);
-            });
+            fetchDatasetSettings();
         });
     }
 
@@ -306,9 +371,7 @@
             });
             filteredImages = [...datasetImages];
 
-            backend.getDatasetSettings(function(settingsRes) {
-                applyLoadedSettings(settingsRes);
-            });
+            fetchDatasetSettings();
         });
     }
 
@@ -318,7 +381,7 @@
                 relative_path: img.relative_path,
                 tags: [...img.tags]
             })),
-            keywords: keywordsInput ? keywordsInput.value : "",
+            keywords: keywordsCombo ? keywordsCombo.value : "",
             selectedImageIndex: selectedImageIndex
         };
         undoStack.push(snapshot);
@@ -333,7 +396,7 @@
                 relative_path: img.relative_path,
                 tags: [...img.tags]
             })),
-            keywords: keywordsInput ? keywordsInput.value : "",
+            keywords: keywordsCombo ? keywordsCombo.value : "",
             selectedImageIndex: selectedImageIndex
         };
         redoStack.push(currentState);
@@ -347,7 +410,7 @@
                 relative_path: img.relative_path,
                 tags: [...img.tags]
             })),
-            keywords: keywordsInput ? keywordsInput.value : "",
+            keywords: keywordsCombo ? keywordsCombo.value : "",
             selectedImageIndex: selectedImageIndex
         };
         undoStack.push(currentState);
@@ -372,11 +435,11 @@
             targetState.images.forEach(prevImg => {
                 batchUpdates[prevImg.relative_path] = prevImg.tags.join(', ');
             });
-            if (keywordsInput) keywordsInput.value = targetState.keywords;
+            if (keywordsCombo) keywordsCombo.value = targetState.keywords;
             if (backend) {
                 backend.saveBatchImageTags(JSON.stringify(batchUpdates));
-                if (keywordsInput) {
-                    currentSettingsData.keywords = keywordsInput.value;
+                if (keywordsCombo) {
+                    currentSettingsData.keywords = keywordsCombo.value;
                     backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
                 }
             }
@@ -398,11 +461,11 @@
                     batchUpdates[prevImg.relative_path] = img.tags.join(', ');
                 }
             });
-            if (keywordsInput) keywordsInput.value = targetState.keywords;
+            if (keywordsCombo) keywordsCombo.value = targetState.keywords;
             if (backend) {
                 backend.saveBatchImageTags(JSON.stringify(batchUpdates));
-                if (keywordsInput) {
-                    currentSettingsData.keywords = keywordsInput.value;
+                if (keywordsCombo) {
+                    currentSettingsData.keywords = keywordsCombo.value;
                     backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
                 }
             }
@@ -417,15 +480,13 @@
         }
     }
 
-
-
     // Connect via QWebChannel first, then setup all event listeners and fetch dataset
     new QWebChannel(qt.webChannelTransport, function(channel) {
         backend = channel.objects.backend;
-        keywordsInput = document.getElementById('keywords-input');
+        keywordsCombo = document.getElementById('keywords-combo');
 
-        if (keywordsInput) {
-            keywordsInput.addEventListener('input', function() {
+        if (keywordsCombo) {
+            keywordsCombo.addEventListener('change', function() {
                 renderActiveTags();
                 renderGlobalTagsList();
                 if (backend) {
@@ -434,17 +495,26 @@
                 }
             });
 
-            keywordsInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    const val = this.value.trim();
-                    if (val && selectedImageIndex !== null) {
-                        applyKeywordsToSelection(val);
-                    }
+            // Right-click contextmenu to open native keyword groups manager
+            keywordsCombo.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                if (backend && typeof backend.openNativeKeywordGroupsDialog === 'function') {
+                    backend.openNativeKeywordGroupsDialog();
+                    setTimeout(fetchDatasetSettings, 300);
                 }
             });
         }
 
-        // Inside QWebChannel initialization / settings loading:
+        const editKeywordsGroupsBtn = document.getElementById('edit-keywords-groups-btn');
+        if (editKeywordsGroupsBtn) {
+            editKeywordsGroupsBtn.addEventListener('click', function() {
+                if (backend && typeof backend.openNativeKeywordGroupsDialog === 'function') {
+                    backend.openNativeKeywordGroupsDialog();
+                    setTimeout(fetchDatasetSettings, 300);
+                }
+            });
+        }
+
         const e621ToggleCb = document.getElementById('e621-toggle-cb');
         if (e621ToggleCb) {
             e621ToggleCb.addEventListener('change', function() {
@@ -455,12 +525,6 @@
             });
         }
 
-        // Inside browseFolder / fetchDataset after loading settings:
-        if (e621ToggleCb) {
-            e621ToggleCb.checked = !!currentSettingsData.use_e621;
-        }
-
-        // Inside tagInput autocomplete handler:
         if (tagInput) {
             tagInput.addEventListener('input', function() {
                 const val = this.value.trim().toLowerCase();
@@ -472,7 +536,6 @@
                 const useE621 = e621ToggleCb ? e621ToggleCb.checked : false;
 
                 if (useE621 && backend && typeof backend.getE621AutocompleteSuggestions === 'function') {
-                    // --- TOGGLE ON: Use e621 External Autocomplete ---
                     backend.getE621AutocompleteSuggestions(val, function(response) {
                         try {
                             const matches = JSON.parse(response);
@@ -482,7 +545,6 @@
                         }
                     });
                 } else {
-                    // --- TOGGLE OFF: Use Internal Dataset Autocomplete ---
                     fallbackLocalAutocomplete(val);
                 }
             });
@@ -525,7 +587,6 @@
 
         document.getElementById('filter-input').addEventListener('input', onFilterInputChanged);
 
-        // Fetch dataset upon successful channel connection
         fetchDataset();
     });
 
@@ -667,7 +728,6 @@
         const currentTagsStr = img.tags.join(', ');
         const modalTitle = `Edit Tag / Caption: ${img.filename}`;
 
-        // Opens the native PyQt EditPromptDialog window
         openEditTagModal(modalTitle, currentTagsStr, (newText) => {
             pushUndoState();
 
@@ -679,17 +739,14 @@
 
             img.tags = cleanImageTags(updatedTags);
 
-            // Save changes to disk via backend bridge
             if (backend && typeof backend.saveImageTags === 'function') {
                 backend.saveImageTags(img.relative_path, img.tags.join(', '));
             }
 
-            // Refresh UI components
             renderActiveTags();
             renderGlobalTagsList();
             renderGrid();
 
-            // Update selection if it matches
             if (selectedImageIndex === originalIdx) {
                 selectImage(originalIdx, true);
             }
@@ -782,7 +839,7 @@
         container.innerHTML = '';
 
         const currentQuery = document.getElementById('filter-input').value.trim().toLowerCase();
-        const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
+        const activeKeywords = keywordsCombo ? keywordsCombo.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
 
         const tagCounts = {};
         datasetImages.forEach(img => img.tags.forEach(t => tagCounts[t] = (tagCounts[t] || 0) + 1));
@@ -866,12 +923,10 @@
                     renderGrid();
                     e.stopPropagation();
                 } else if (e.shiftKey) {
-                    // Shift + Click toggle across selected images
                     pushUndoState();
                     const targets = getSelectedIndices();
                     const updates = {};
 
-                    // Check if *all* targeted images already have this tag; if so, remove it. Otherwise, add it.
                     const allHaveTag = targets.length > 0 && targets.every(idx => {
                         return datasetImages[idx].tags.map(t => t.toLowerCase()).includes(tag.toLowerCase());
                     });
@@ -917,7 +972,7 @@
 
         document.getElementById('active-tag-count').innerText = `Tags (${img.tags.length})`;
         const currentQuery = document.getElementById('filter-input').value.trim().toLowerCase();
-        const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
+        const activeKeywords = keywordsCombo ? keywordsCombo.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
 
         let dropIndicator = document.getElementById('tag-drop-indicator');
         if (!dropIndicator) {
@@ -1046,7 +1101,6 @@
                         addToKeywords(tag);
                     }
                 } else if (e.shiftKey) {
-                    // Shift + Click toggle for selected image tags
                     pushUndoState();
                     if (img.tags.map(t => t.toLowerCase()).includes(tag.toLowerCase())) {
                         img.tags = img.tags.filter(t => t.toLowerCase() !== tag.toLowerCase());
@@ -1083,7 +1137,7 @@
         if (!img || img.tags.length <= 1) return;
 
         pushUndoState();
-        const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
+        const activeKeywords = keywordsCombo ? keywordsCombo.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
         const keywordTags = [];
         const standardTags = [];
 
@@ -1124,47 +1178,98 @@
     }
 
     function addToKeywords(tag) {
-        if (!keywordsInput) return;
+        if (!keywordsCombo) return;
         pushUndoState();
-        const currentVal = keywordsInput.value.trim();
+        const currentVal = keywordsCombo.value.trim();
         let keywordsList = currentVal ? currentVal.split(',').map(k => k.trim()).filter(k => k.length > 0) : [];
+
         if (!keywordsList.map(k => k.toLowerCase()).includes(tag.toLowerCase())) {
             keywordsList.push(tag);
-            keywordsInput.value = keywordsList.join(', ');
+            const newVal = keywordsList.join(', ');
+
+            let foundMatch = false;
+            for (let i = 0; i < keywordsCombo.options.length; i++) {
+                if (keywordsCombo.options[i].value === currentVal || keywordsCombo.selectedIndex === i) {
+                    keywordsCombo.options[i].value = newVal;
+                    const fullText = keywordsCombo.options[i].text;
+                    const groupTitle = fullText.includes(':') ? fullText.split(':')[0].trim() : "General";
+                    keywordsCombo.options[i].text = `${groupTitle}: ${newVal}`;
+                    keywordsCombo.selectedIndex = i;
+
+                    if (currentSettingsData.keyword_groups) {
+                        const groupKey = groupTitle.toLowerCase();
+                        if (currentSettingsData.keyword_groups[groupKey]) {
+                            currentSettingsData.keyword_groups[groupKey] = [...keywordsList];
+                        }
+                    }
+                    foundMatch = true;
+                    break;
+                }
+            }
+
+            if (!foundMatch) {
+                const opt = document.createElement('option');
+                opt.value = newVal;
+                opt.text = `Custom: ${newVal}`;
+                keywordsCombo.appendChild(opt);
+                keywordsCombo.value = newVal;
+            }
+
             renderActiveTags();
             renderGlobalTagsList();
+
             if (backend) {
-                currentSettingsData.keywords = keywordsInput.value;
+                currentSettingsData.keywords = keywordsCombo.value;
                 backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
             }
         }
     }
 
     function removeFromKeywords(tag) {
-        if (!keywordsInput) return;
-        const currentVal = keywordsInput.value.trim();
+        if (!keywordsCombo) return;
+        const currentVal = keywordsCombo.value.trim();
         if (!currentVal) return;
         pushUndoState();
+
         let keywordsList = currentVal.split(',').map(k => k.trim()).filter(k => k.length > 0);
         const updatedList = keywordsList.filter(k => k.toLowerCase() !== tag.toLowerCase());
+
         if (updatedList.length !== keywordsList.length) {
-            keywordsInput.value = updatedList.join(', ');
+            const newVal = updatedList.join(', ');
+            for (let i = 0; i < keywordsCombo.options.length; i++) {
+                if (keywordsCombo.options[i].value === currentVal || keywordsCombo.selectedIndex === i) {
+                    keywordsCombo.options[i].value = newVal;
+                    const groupTitle = keywordsCombo.options[i].text.split(':')[0];
+                    keywordsCombo.options[i].text = `${groupTitle}: ${newVal}`;
+                    keywordsCombo.selectedIndex = i;
+
+                    if (currentSettingsData.keyword_groups) {
+                        const groupKey = groupTitle.toLowerCase();
+                        if (currentSettingsData.keyword_groups[groupKey]) {
+                            currentSettingsData.keyword_groups[groupKey] = [...updatedList];
+                        }
+                    }
+                    break;
+                }
+            }
+
             renderActiveTags();
             renderGlobalTagsList();
+
             if (backend) {
-                currentSettingsData.keywords = keywordsInput.value;
+                currentSettingsData.keywords = keywordsCombo.value;
                 backend.saveDatasetSettings(JSON.stringify(currentSettingsData));
             }
         }
     }
 
     function moveKeywordsToFrontBtn() {
-        if (!keywordsInput) return;
-        const val = keywordsInput.value.trim();
+        if (!keywordsCombo) return;
+        const val = keywordsCombo.value.trim();
         if (val && selectedImageIndex !== null) {
             moveKeywordsToFrontForSelection(val);
         } else {
-            alert("Please select an image and enter keywords first.");
+            alert("Please select an image and pick a keyword group first.");
         }
     }
 
@@ -1210,8 +1315,8 @@
     }
 
     function applyKeywordsToSelectionBtn() {
-        if (!keywordsInput) return;
-        const val = keywordsInput.value.trim();
+        if (!keywordsCombo) return;
+        const val = keywordsCombo.value.trim();
         if (val && selectedImageIndex !== null) applyKeywordsToSelection(val);
     }
 
@@ -1236,8 +1341,8 @@
     }
 
     function applyKeywordsToAll() {
-        if (!keywordsInput) return;
-        const keywordsStr = keywordsInput.value.trim();
+        if (!keywordsCombo) return;
+        const keywordsStr = keywordsCombo.value.trim();
         const rawKeywords = keywordsStr.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0);
         if (rawKeywords.length === 0 || datasetImages.length === 0) return;
 
@@ -1274,7 +1379,7 @@
                 backend.autoTagBatch(JSON.stringify(pathsToProcess), function(resultsJson) {
                     try {
                         const results = JSON.parse(resultsJson);
-                        const activeKeywords = keywordsInput ? keywordsInput.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
+                        const activeKeywords = keywordsCombo ? keywordsCombo.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
                         const strategy = currentSettingsData.tag_strategy || "add";
 
                         targets.forEach(idx => {
@@ -1328,7 +1433,6 @@
             div.className = 'autocomplete-item';
             div.innerText = match;
             div.onclick = () => {
-                // --- Automatically add tag on click without needing Enter ---
                 addTagToSelection(match);
                 tagInput.value = '';
                 autoBox.style.display = 'none';
@@ -1357,7 +1461,6 @@
             const useE621 = e621ToggleCb ? e621ToggleCb.checked : false;
 
             if (useE621 && backend && typeof backend.getE621AutocompleteSuggestions === 'function') {
-                // --- TOGGLE ON: Use e621 External Autocomplete ---
                 backend.getE621AutocompleteSuggestions(val, function(response) {
                     try {
                         const matches = JSON.parse(response);
@@ -1367,7 +1470,6 @@
                     }
                 });
             } else {
-                // --- TOGGLE OFF: Use Internal Dataset Autocomplete ---
                 fallbackLocalAutocomplete(val);
             }
         });
@@ -1386,8 +1488,14 @@
         });
     }
 
+    // Disable default Chromium right-click context menu globally
+    document.addEventListener('contextmenu', function(e) {
+        // Prevent Chromium's built-in inspect / save / copy context menu
+        e.preventDefault();
+    }, false);
+
     document.addEventListener('keydown', function(e) {
-        const activeInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input') || document.activeElement === keywordsInput;
+        const activeInput = document.activeElement === tagInput || document.activeElement === document.getElementById('filter-input') || document.activeElement === keywordsCombo;
 
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && !activeInput) {
             e.preventDefault();
