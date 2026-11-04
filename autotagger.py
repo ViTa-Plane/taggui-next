@@ -7,7 +7,7 @@ from PIL import Image
 from PySide6.QtCore import QThread, Signal
 from huggingface_hub import hf_hub_download
 
-# version = 1.2.1
+# version = 1.2.14
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -48,7 +48,7 @@ class AutoTagWorker(QThread):
             device = "cuda" if torch.cuda.is_available() else "cpu"
             dtype = torch.float16 if device == "cuda" else torch.float32
 
-            is_vlm = any(k in model_name.lower() for k in ["blip", "florence", "moondream", "joycaption", "qwen"])
+            is_vlm = any(k in model_name.lower() for k in ["blip", "florence", "moondream", "joycaption", "qwen", "minicpm"])
 
             model = None
             processor = None
@@ -59,29 +59,37 @@ class AutoTagWorker(QThread):
             if is_vlm:
                 self.log_signal.emit(f"[Backend] Loading captioning/VLM model: {model_name}...")
 
+                # model loading branches
+                # -----------------blip-----------------------
                 if "blip" in model_name.lower() and "blip2" not in model_name.lower():
                     from transformers import BlipProcessor, BlipForConditionalGeneration
                     processor = BlipProcessor.from_pretrained(model_name, trust_remote_code=True)
                     model = BlipForConditionalGeneration.from_pretrained(
                         model_name, torch_dtype=dtype, trust_remote_code=True
                     ).to(device)
+
                 else:
                     from transformers import AutoProcessor
                     processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
 
+                    # -----------------blip2-----------------------
                     if "blip2" in model_name.lower():
                         from transformers import Blip2ForConditionalGeneration
                         model = Blip2ForConditionalGeneration.from_pretrained(
                             model_name, torch_dtype=dtype, trust_remote_code=True
                         ).to(device)
+                    # -----------------------------
 
+                    # -----------------joycaption-----------------------
                     elif "joycaption" in model_name.lower() or "llava" in model_name.lower():
                         from transformers import AutoProcessor, LlavaForConditionalGeneration
                         processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
                         model = LlavaForConditionalGeneration.from_pretrained(
                             model_name, torch_dtype=dtype, trust_remote_code=True
                         ).to(device)
+                    # -----------------------------
 
+                    # ----------------florence------------------------
                     elif "florence" in model_name.lower():
                         from transformers import AutoModelForCausalLM, GenerationConfig
 
@@ -92,7 +100,7 @@ class AutoTagWorker(QThread):
                             attn_implementation="eager"
                         ).to(device)
 
-                        # --- ROBUST CONFIG FIX FOR COGFLORENCE-2 ---
+                        # --- CONFIG FIX FOR COGFLORENCE-2 ---
                         for target_obj in [model, getattr(model, "language_model", None)]:
                             if target_obj is not None:
                                 if getattr(target_obj, "generation_config", None) is None:
@@ -103,7 +111,7 @@ class AutoTagWorker(QThread):
 
                                 if not hasattr(target_obj.generation_config, "_from_model_config"):
                                     target_obj.generation_config._from_model_config = False
-                        # -------------------------------------------
+
 
                         # Safety patch if missing generation mixin/attributes
                         if hasattr(model, "language_model"):
@@ -123,6 +131,7 @@ class AutoTagWorker(QThread):
 
                             if not hasattr(model.language_model, "generate"):
                                 model.language_model.generate = lambda *args, **kwargs: model.generate(*args, **kwargs)
+                    # -----------------------------
 
                     # ---  QWEN LOADING BLOCK  ---
                     elif "qwen" in model_name.lower():
@@ -138,6 +147,20 @@ class AutoTagWorker(QThread):
                                 trust_remote_code=True,
                                 model_type="qwen2_vl"
                             )
+
+                        # --- CHAT TEMPLATE FALLBACK ---
+                        target_tokenizer = getattr(processor, "tokenizer", processor)
+                        if getattr(target_tokenizer, "chat_template", None) is None:
+                            target_tokenizer.chat_template = (
+                                "{% for message in messages %}"
+                                "{% if message['role'] == 'system' %}<|im_start|>system\n{{ message['content'] }}<|im_end|>\n"
+                                "{% elif message['role'] == 'user' %}<|im_start|>user\n{{ message['content'] }}<|im_end|>\n"
+                                "{% elif message['role'] == 'assistant' %}<|im_start|>assistant\n{{ message['content'] }}<|im_end|>\n"
+                                "{% endif %}"
+                                "{% endfor %}"
+                                "{% if add_generation_prompt %}<|im_start|>assistant\n{% endif %}"
+                            )
+                        # ------------------------------
 
                         # 2. Safe Model Load with explicit Qwen VL classes fallback
                         try:
@@ -161,8 +184,9 @@ class AutoTagWorker(QThread):
                                     torch_dtype=dtype,
                                     trust_remote_code=True
                                 ).to(device)
-                    # ----------------------------------------
+                    # -----------------------------
 
+                    # ------moondream LOADING BLOCK----
                     elif "moondream" in model_name.lower():
                         from transformers import AutoModelForCausalLM, GenerationConfig
 
@@ -202,6 +226,25 @@ class AutoTagWorker(QThread):
 
                             if not hasattr(model.text_model, "generate"):
                                 model.text_model.generate = lambda *args, **kwargs: model.generate(*args, **kwargs)
+                    # -----------------------------
+
+                    # --- MINICPM LOADING BLOCK ---
+                    elif "minicpm" in model_name.lower():
+                        from transformers import AutoModel, AutoProcessor
+                        processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+                        model = AutoModel.from_pretrained(
+                            model_name,
+                            torch_dtype=dtype,
+                            trust_remote_code=True,
+                            device_map="auto" if device == "cuda" else None
+                        )
+                        if device == "cpu":
+                            model = model.to(device)
+                    # -----------------------------
+
+                    # model loading branches
+
+
                     else:
                         try:
                             from transformers import AutoModelForVision2Seq
@@ -239,9 +282,10 @@ class AutoTagWorker(QThread):
                     if is_vlm:
                         with Image.open(img_path) as raw_img:
                             image = raw_img.convert("RGB")
-
                         generated_text = ""
                         with torch.no_grad():
+
+                            # --- blip GENERATION BLOCK ---
                             if "blip" in model_name.lower() and "blip2" not in model_name.lower():
                                 prompt = task_command if task_command else "A detailed, descriptive caption of this image with background details:"
                                 inputs = processor(images=image, text=prompt, return_tensors="pt").to(device, dtype)
@@ -268,7 +312,9 @@ class AutoTagWorker(QThread):
                                     generated_ids[:, input_len:],
                                     skip_special_tokens=True
                                 )[0].strip()
+                            # ---------------------------------------------
 
+                            # --- blip2 GENERATION BLOCK ---
                             elif "blip2" in model_name.lower():
                                 prompt = task_command if task_command else "A detailed, descriptive caption of this image with background details:"
                                 if prompt:
@@ -296,7 +342,9 @@ class AutoTagWorker(QThread):
                                     generated_ids,
                                     skip_special_tokens=True
                                 )[0].strip()
+                            # ---------------------------------------------
 
+                            # --- florence GENERATION BLOCK ---
                             elif "florence" in model_name.lower():
                                 prompt = task_command if task_command else "<CAPTION>"
                                 fl_image = image.resize((768, 768), Image.Resampling.LANCZOS)
@@ -324,11 +372,14 @@ class AutoTagWorker(QThread):
                                     generated_text = list(parsed.values())[0]
                                 else:
                                     generated_text = str(parsed)
+                            # ---------------------------------------------
 
+                            # --- moondream GENERATION BLOCK ---
                             elif "moondream" in model_name.lower():
                                 enc_image = model.encode_image(image)
                                 generated_text = model.answer_question(enc_image, "Describe this image concisely.",
                                                                        processor)
+                            # ---------------------------------------------
 
                             # --- QWEN GENERATION BLOCK WITH SETTINGS ---
                             elif "qwen" in model_name.lower():
@@ -347,17 +398,21 @@ class AutoTagWorker(QThread):
                                     tokenize=False,
                                     add_generation_prompt=True
                                 )
+
+                                # --- FIX: Aspect-ratio safe scaling with patch-grid snapping ---
                                 inputs = processor(
                                     text=[text_prompt],
                                     images=[image],
                                     padding=True,
+                                    max_pixels=1280 * 28 * 28,  # Balances high detail with VRAM constraints
+                                    min_pixels=256 * 28 * 28,
                                     return_tensors="pt"
                                 ).to(device)
+                                # -------------------------------------------------------------
 
                                 if "pixel_values" in inputs and inputs["pixel_values"] is not None:
                                     inputs["pixel_values"] = inputs["pixel_values"].to(dtype)
 
-                                # retrieve values from settings dialog and pass them directly into model.generate(...)
                                 thinking_mode = self.settings.get("thinking_mode", False)
                                 temperature = self.settings.get("temperature", 0.6 if thinking_mode else 0.7)
                                 top_p = self.settings.get("top_p", 0.95 if thinking_mode else 0.8)
@@ -383,6 +438,7 @@ class AutoTagWorker(QThread):
                                 generated_text = decoded_outputs[0].strip() if decoded_outputs else ""
                             # ---------------------------------------------
 
+                            # --- joycaption GENERATION BLOCK ---
                             elif "joycaption" in model_name.lower() or "llava" in model_name.lower():
                                 prompt = task_command if task_command else "Write a descriptive caption for this image."
 
@@ -441,7 +497,27 @@ class AutoTagWorker(QThread):
                                     skip_special_tokens=True
                                 )
                                 generated_text = decoded_outputs[0].strip() if decoded_outputs else ""
+                            # ---------------------------------------------
 
+                            # --- MINICPM GENERATION BLOCK ---
+                            elif "minicpm" in model_name.lower():
+                                prompt = task_command if task_command else "What is in the image?"
+                                msgs = [{'role': 'user', 'content': [image, prompt]}]
+                                thinking_mode = self.settings.get("thinking_mode", False)
+                                temperature = self.settings.get("temperature", 0.6 if thinking_mode else 0.7)
+                                max_new_tokens = self.settings.get("qwen_max_new_tokens", 256)
+
+                                generated_text = model.chat(
+                                    image=image,
+                                    msgs=msgs,
+                                    processor=processor,
+                                    temperature=temperature,
+                                    max_new_tokens=max_new_tokens,
+                                    sampling=True
+                                )
+                            # --------------------------------
+
+                            
                             else:
                                 inputs = processor(images=image, return_tensors="pt").to(device, dtype)
                                 generated_ids = model.generate(**inputs, max_new_tokens=100)
