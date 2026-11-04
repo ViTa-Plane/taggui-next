@@ -6,11 +6,11 @@ from PySide6.QtWidgets import (
     QFileDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
     QPushButton, QFrame, QComboBox, QSlider, QCheckBox, QSpinBox, QToolButton,
     QGroupBox, QScrollArea, QWidget, QStackedWidget, QMessageBox, QInputDialog,
-    QSizeGrip
+    QSizeGrip,QLineEdit
 )
 from PySide6.QtGui import QIcon, QColor
 
-# version = 1.2.1
+# version = 1.2.29
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -22,17 +22,36 @@ class EditableComboBox(QComboBox):
     def __init__(self, parent=None, settings_dialog=None):
         super().__init__(parent)
         self.settings_dialog = settings_dialog
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.open_edit_dialog)
 
     def open_edit_dialog(self, pos):
+        if self.settings_dialog:
+            selected_id = self.settings_dialog.model_combo.currentData()
+            model_info = next((m for m in self.settings_dialog.available_interrogators if m["id"] == selected_id), None)
+            category = model_info.get("category", "") if model_info else ""
+            family_name = model_info.get("family", "Captioner") if model_info else "Captioner"
+
+            # Prevent opening edit dialog if the active model doesn't support custom prompts
+            supports_custom_prompts = category not in ["florence2", "moondream", "tagger"] and family_name.lower() not in ["florence-2", "moondream2"]
+            if not supports_custom_prompts:
+                return
+
         current_text = self.currentText()
         if not current_text:
             return
 
-        dialog = EditPromptDialog("Edit Task Command", current_text, parent=self.settings_dialog)
+        # Use PromptInputDialog correctly with defined variables
+        dialog = PromptInputDialog(
+            title_text="Edit Task Command",
+            initial_value=current_text,
+            badge_icon="✏️",
+            confirm_text="Save Changes",
+            parent=self.settings_dialog
+        )
+
         if dialog.exec() == QDialog.Accepted:
-            new_text = dialog.get_edited_text()
+            new_text = dialog.get_text() # Matches the get_text() method in PromptInputDialog
             if new_text:
                 if "custom_commands" not in self.settings_dialog.settings_data:
                     self.settings_dialog.settings_data["custom_commands"] = []
@@ -42,13 +61,38 @@ class EditableComboBox(QComboBox):
                 self.settings_dialog.update_visibility()
                 self.setCurrentText(new_text)
 
+class EditableKeywordComboBox(QComboBox):
+    def __init__(self, parent=None, settings_dialog=None):
+        super().__init__(parent)
+        self.settings_dialog = settings_dialog
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.open_edit_dialog)
+
+    def open_edit_dialog(self, pos):
+        current_text = self.currentText()
+        dialog = PromptInputDialog(
+            title_text="Edit Keyword Group",
+            initial_value=current_text,
+            badge_icon="🔑",
+            confirm_text="Save Changes",
+            parent=self.settings_dialog
+        )
+        if dialog.exec() == QDialog.Accepted:
+            new_text = dialog.get_text()
+            if new_text:
+                idx = self.findText(new_text)
+                if idx >= 0:
+                    self.setCurrentIndex(idx)
+                else:
+                    self.addItem(new_text)
+                    self.setCurrentText(new_text)
 
 # ==============================================================================
 #  CONFIRMATION & PROGRESS DIALOGS
 # ==============================================================================
 
 class TaggingConfirmDialog(QDialog):
-    def __init__(self, count, parent=None):
+    def __init__(self, count,model_name="selected model", parent=None):
         super().__init__(parent)
         self.setWindowTitle("TagGUI Next - Confirm Auto-Tag")
         self.resize(420, 200)
@@ -81,14 +125,16 @@ class TaggingConfirmDialog(QDialog):
         """)
         header_layout.addWidget(badge)
 
-        title = QLabel("RUN LOCAL PYTORCH AUTOTAG")
+        title = QLabel("RUN LOCAL PYTORCH AUTO-TAGGER")
         title.setObjectName("titleLabel")
         header_layout.addWidget(title)
         header_layout.addStretch()
         card_layout.addLayout(header_layout)
 
         desc = QLabel(
-            f"Run local PyTorch auto-tagger for <b>{count}</b> selected image(s)? This will process images using your selected model configuration.")
+            f"Run local PyTorch auto-tagger for <b>{count}</b> selected image(s)? "
+            f"This will process images using <b>{model_name}</b>."
+        )
         desc.setObjectName("descLabel")
         desc.setWordWrap(True)
         card_layout.addWidget(desc)
@@ -311,15 +357,14 @@ class TaggingProgressDialog(QDialog):
         self.dragPosition = None
         event.accept()
 
-class CustomPromptDialog(QDialog):
-    def __init__(self, parent=None):
+class PromptInputDialog(QDialog):
+    def __init__(self, title_text="Input", initial_value="", badge_icon="✏️", confirm_text="Save", single_line=False, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("TagGUI Next - Add Custom Prompt")
-        self.resize(480, 240)
-        self.setMinimumSize(400, 240)
+        self.setWindowTitle(f"TagGUI Next - {title_text}")
+        self.resize(480, 180 if single_line else 240)
+        self.setMinimumSize(400, 160 if single_line else 240)
         self.setModal(True)
 
-        # Enable window resize capability alongside frameless hint
         self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
@@ -328,6 +373,7 @@ class CustomPromptDialog(QDialog):
             self.setWindowIcon(QIcon(str(icon_path)))
 
         self.dragPosition = None
+        self.single_line = single_line
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(12, 12, 12, 12)
@@ -340,124 +386,7 @@ class CustomPromptDialog(QDialog):
 
         # Header
         header_layout = QHBoxLayout()
-        badge = QLabel("💬")
-        badge.setStyleSheet("""
-            background: rgba(99, 102, 241, 0.2);
-            border: 1px solid rgba(99, 102, 241, 0.4);
-            border-radius: 6px;
-            padding: 4px 8px;
-            font-size: 14px;
-        """)
-        header_layout.addWidget(badge)
-
-        title = QLabel("ADD CUSTOM PROMPT / TASK COMMAND")
-        title.setObjectName("titleLabel")
-        header_layout.addWidget(title)
-        header_layout.addStretch()
-
-        # Close X Button
-        self.close_icon_btn = QToolButton()
-        self.close_icon_btn.setObjectName("dialogCloseBtn")
-        self.close_icon_btn.setText("×")
-        self.close_icon_btn.setFixedSize(20, 20)
-        self.close_icon_btn.setCursor(Qt.PointingHandCursor)
-        self.close_icon_btn.setStyleSheet("""
-            QToolButton#dialogCloseBtn {
-                background: transparent;
-                border: none;
-                color: #94a3b8;
-                font-size: 16px;
-                font-weight: bold;
-            }
-        """)
-        self.close_icon_btn.clicked.connect(self.reject)
-        header_layout.addWidget(self.close_icon_btn)
-        card_layout.addLayout(header_layout)
-
-        # Text Input Area
-        self.text_edit = QTextEdit()
-        self.text_edit.setObjectName("logOutput")  # Reuses your clean text edit styling
-        self.text_edit.setPlaceholderText("Enter custom prompt or task command...")
-        self.text_edit.setMinimumHeight(80)
-        card_layout.addWidget(self.text_edit)
-
-        # Footer Buttons
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-
-        self.cancel_btn = QPushButton("Cancel")
-        self.cancel_btn.setObjectName("cancelBtn")
-        self.cancel_btn.clicked.connect(self.reject)
-
-        self.confirm_btn = QPushButton("Add Prompt")
-        self.confirm_btn.setObjectName("confirmBtn")
-        self.confirm_btn.clicked.connect(self.accept)
-
-        btn_layout.addWidget(self.cancel_btn)
-        btn_layout.addWidget(self.confirm_btn)
-        card_layout.addLayout(btn_layout)
-
-        main_layout.addWidget(card)
-
-        # Instantiate QSizeGrip as a direct child for bottom-right corner resizing
-        self.size_grip = QSizeGrip(self)
-        self.size_grip.setStyleSheet("background: transparent;")
-        self.size_grip.raise_()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        grip_size = 16
-        self.size_grip.setGeometry(self.width() - grip_size - 12, self.height() - grip_size - 12, grip_size, grip_size)
-        self.size_grip.raise_()
-
-    # --- Window Dragging Handlers ---
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            event.accept()
-
-    def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.LeftButton and self.dragPosition is not None:
-            self.move(event.globalPosition().toPoint() - self.dragPosition)
-            event.accept()
-
-    def mouseReleaseEvent(self, event):
-        self.dragPosition = None
-        event.accept()
-
-    def get_prompt_text(self):
-        return self.text_edit.toPlainText().strip()
-
-class EditPromptDialog(QDialog):
-    def __init__(self, title_text="Edit Tag / Caption", initial_value="", parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("TagGUI Next - Edit")
-        self.resize(480, 240)
-        self.setMinimumSize(400, 240)
-        self.setModal(True)
-
-        # Enable window resize capability alongside frameless hint
-        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint)
-        self.setAttribute(Qt.WA_TranslucentBackground, True)
-
-        icon_path = Path(__file__).parent / "assets" / "icon.png"
-        if icon_path.exists():
-            self.setWindowIcon(QIcon(str(icon_path)))
-
-        self.dragPosition = None
-
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 12, 12, 12)
-
-        card = QFrame()
-        card.setObjectName("cardFrame")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(18, 18, 18, 18)
-        card_layout.setSpacing(12)
-
-        # Header
-        header_layout = QHBoxLayout()
-        badge = QLabel("✏️")
+        badge = QLabel(badge_icon)
         badge.setStyleSheet("""
             background: rgba(99, 102, 241, 0.2);
             border: 1px solid rgba(99, 102, 241, 0.4);
@@ -478,27 +407,33 @@ class EditPromptDialog(QDialog):
         self.close_icon_btn.setText("×")
         self.close_icon_btn.setFixedSize(20, 20)
         self.close_icon_btn.setCursor(Qt.PointingHandCursor)
-        self.close_icon_btn.setStyleSheet("""
-            QToolButton#dialogCloseBtn {
-                background: transparent;
-                border: none;
-                color: #94a3b8;
-                font-size: 16px;
-                font-weight: bold;
-            }
-        """)
         self.close_icon_btn.clicked.connect(self.reject)
         header_layout.addWidget(self.close_icon_btn)
         card_layout.addLayout(header_layout)
 
-        # Text Input Area
-        self.text_edit = QTextEdit()
-        self.text_edit.setObjectName("logOutput")
-        self.text_edit.setPlainText(initial_value)
-        self.text_edit.setMinimumHeight(100)
-        card_layout.addWidget(self.text_edit)
+        # Text Input Area (QLineEdit for single-line, QTextEdit for multiline)
+        if self.single_line:
+            self.text_input = QLineEdit()
+            self.text_input.setObjectName("keywordLineEdit")
+            if initial_value:
+                self.text_input.setText(initial_value)
+            else:
+                self.text_input.setPlaceholderText("Enter new group name...")
+            self.text_input.returnPressed.connect(self.accept)
+            card_layout.addWidget(self.text_input)
+            self.text_input.setFocus()
+        else:
+            self.text_input = QTextEdit()
+            self.text_input.setObjectName("logOutput")
+            if initial_value:
+                self.text_input.setPlainText(initial_value)
+            else:
+                self.text_input.setPlaceholderText("Enter custom prompt or task command...")
+            self.text_input.setMinimumHeight(100)
+            card_layout.addWidget(self.text_input)
+            self.text_input.setFocus()
 
-        # Footer Buttons (Clean layout without size grip inside it)
+        # Footer Buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -506,7 +441,7 @@ class EditPromptDialog(QDialog):
         self.cancel_btn.setObjectName("cancelBtn")
         self.cancel_btn.clicked.connect(self.reject)
 
-        self.confirm_btn = QPushButton("Save Changes")
+        self.confirm_btn = QPushButton(confirm_text)
         self.confirm_btn.setObjectName("confirmBtn")
         self.confirm_btn.clicked.connect(self.accept)
 
@@ -516,21 +451,17 @@ class EditPromptDialog(QDialog):
 
         main_layout.addWidget(card)
 
-        # Instantiate QSizeGrip as a direct child of the dialog window
+        # Size Grip
         self.size_grip = QSizeGrip(self)
         self.size_grip.setStyleSheet("background: transparent;")
         self.size_grip.raise_()
 
-        self.text_edit.setFocus()
-
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # Lock QSizeGrip to the bottom-right corner of the window
         grip_size = 16
         self.size_grip.setGeometry(self.width() - grip_size - 12, self.height() - grip_size - 12, grip_size, grip_size)
         self.size_grip.raise_()
 
-    # --- Window Dragging Handlers ---
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -545,8 +476,10 @@ class EditPromptDialog(QDialog):
         self.dragPosition = None
         event.accept()
 
-    def get_edited_text(self):
-        return self.text_edit.toPlainText().strip()
+    def get_text(self):
+        if self.single_line:
+            return self.text_input.text().strip()
+        return self.text_input.toPlainText().strip()
 
 # ------------------------------------
 # Settings Dialog UI & Save Logic
@@ -961,7 +894,7 @@ class SettingsDialog(QDialog):
             self.top_k_spin.setValue(20)
 
     def add_custom_prompt(self):
-        dialog = CustomPromptDialog(parent=self)
+        dialog = PromptInputDialog(parent=self)
         if dialog.exec() == QDialog.Accepted:
             text = dialog.get_prompt_text()
             if text:
@@ -984,7 +917,7 @@ class SettingsDialog(QDialog):
         model_info = next((m for m in self.available_interrogators if m["id"] == selected_id), None)
         category = model_info.get("category", "") if model_info else ""
 
-        if category in ["qwen", "joycaption", "llama"]:  # <--- Updated condition
+        if category in ["qwen", "joycaption", "llama", "minicpm",]:
             self.thinking_cb.setChecked(False)
             self.temp_slider.setValue(7)
             self.top_p_slider.setValue(8)
@@ -1042,7 +975,7 @@ class SettingsDialog(QDialog):
         if hasattr(self, "captioner_add_custom_btn"):
             self.captioner_add_custom_btn.setVisible(supports_custom_prompts)
 
-        if category in ["qwen", "joycaption", "llama"]:
+        if category in ["qwen", "joycaption", "llama", "minicpm",]:
             self.settings_stack.setCurrentWidget(self.qwen_group)
             self.qwen_group.setVisible(True)
             self.tagger_group.setVisible(False)
@@ -1118,8 +1051,7 @@ class SettingsDialog(QDialog):
 
     def mouseReleaseEvent(self, event):
         self.dragPosition = None
-        event.accept(
-)
+        event.accept()
 
     # -------------------------------------------------------
     #           Update Settings
@@ -1180,3 +1112,259 @@ class SettingsDialog(QDialog):
             print("==================================================")
 
         return self.settings_data
+    
+class KeywordGroupsDialog(QDialog):
+    def __init__(self, current_keyword_groups, parent=None):
+        super().__init__(parent)
+        self.setObjectName("KeywordGroupsDialog")
+        self.setWindowTitle("TagGUI Next - Dataset Keyword Groups")
+        self.resize(500, 480)
+        self.setModal(True)
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        icon_path = Path(__file__).parent / "assets" / "icon.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
+        self.keyword_groups = copy.deepcopy(current_keyword_groups) or {
+            "general": ["masterpiece", "best quality"],
+            "characters": ["1girl", "solo"]
+        }
+
+        # --- Local Undo/Redo Stacks for Groups ---
+        self.undo_stack = []
+        self.redo_stack = []
+        self.max_history = 30
+
+        self.dragPosition = None
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(10)
+
+        # Header
+        header_layout = QHBoxLayout()
+        badge = QLabel("🔑")
+        badge.setObjectName("badgeLabel")
+        header_layout.addWidget(badge)
+
+        title = QLabel("MANAGE KEYWORD GROUPS")
+        title.setObjectName("titleLabel")
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+
+        self.close_icon_btn = QToolButton()
+        self.close_icon_btn.setObjectName("dialogCloseBtn")
+        self.close_icon_btn.setText("×")
+        self.close_icon_btn.setFixedSize(20, 20)
+        self.close_icon_btn.setCursor(Qt.PointingHandCursor)
+        self.close_icon_btn.clicked.connect(self.reject)
+        header_layout.addWidget(self.close_icon_btn)
+        card_layout.addLayout(header_layout)
+
+        # Scrollable Form Area for Groups
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+
+        scroll_content = QWidget()
+        scroll_content.setObjectName("scrollContent")
+        self.groups_layout = QVBoxLayout(scroll_content)
+        self.groups_layout.setContentsMargins(0, 0, 0, 0)
+        self.groups_layout.setSpacing(8)
+
+        self.populate_groups()
+
+        scroll.setWidget(scroll_content)
+        card_layout.addWidget(scroll)
+
+        # Add Group Button
+        self.add_group_btn = QPushButton("Add New Group")
+        self.add_group_btn.setObjectName("cancelBtn")
+        self.add_group_btn.clicked.connect(self.add_new_group)
+        card_layout.addWidget(self.add_group_btn)
+
+        # Footer Buttons
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setObjectName("cancelBtn")
+        self.cancel_btn.clicked.connect(self.reject)
+        btn_layout.addWidget(self.cancel_btn)
+
+        self.save_btn = QPushButton("Save Groups")
+        self.save_btn.setObjectName("confirmBtn")
+        self.save_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(self.save_btn)
+
+        card_layout.addLayout(btn_layout)
+        main_layout.addWidget(card)
+
+        self.size_grip = QSizeGrip(self)
+        self.size_grip.setObjectName("sizeGrip")
+        self.size_grip.raise_()
+
+    def push_undo_state(self):
+        self.sync_ui_to_dict()
+        snapshot = copy.deepcopy(self.keyword_groups)
+        self.undo_stack.append(snapshot)
+        if len(self.undo_stack) > self.max_history:
+            self.undo_stack.pop(0)
+        self.redo_stack.clear()
+
+    def keyPressEvent(self, event):
+        # Handle Ctrl+Z (Undo) and Ctrl+Shift+Z / Ctrl+Y (Redo) inside the dialog
+        modifiers = event.modifiers()
+        key = event.key()
+
+        if modifiers & Qt.ControlModifier:
+            if key == Qt.Key_Z:
+                if modifiers & Qt.ShiftModifier:
+                    self.perform_redo()
+                else:
+                    self.perform_undo()
+                event.accept()
+                return
+            elif key == Qt.Key_Y:
+                self.perform_redo()
+                event.accept()
+                return
+
+        super().keyPressEvent(event)
+
+    def perform_undo(self):
+        if not self.undo_stack:
+            return
+        self.sync_ui_to_dict()
+        current_snapshot = copy.deepcopy(self.keyword_groups)
+        self.redo_stack.append(current_snapshot)
+
+        prev_snapshot = self.undo_stack.pop()
+        self.keyword_groups = prev_snapshot
+        self.populate_groups()
+
+    def perform_redo(self):
+        if not self.redo_stack:
+            return
+        self.sync_ui_to_dict()
+        current_snapshot = copy.deepcopy(self.keyword_groups)
+        self.undo_stack.append(current_snapshot)
+
+        next_snapshot = self.redo_stack.pop()
+        self.keyword_groups = next_snapshot
+        self.populate_groups()
+
+    def populate_groups(self):
+        while self.groups_layout.count():
+            child = self.groups_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        for group_name, tags_list in self.keyword_groups.items():
+            group_box = QGroupBox()
+            group_box.setObjectName("groupCardBox")
+            group_box.setContentsMargins(0, 0, 0, 0)
+
+            # Lock a consistent minimum height so cards never shrink
+            group_box.setMinimumHeight(64)
+            group_box.setMaximumHeight(64)
+
+            g_layout = QVBoxLayout(group_box)
+            g_layout.setContentsMargins(8, 6, 8, 8)
+            g_layout.setSpacing(4)
+
+            top_row = QHBoxLayout()
+            top_row.setContentsMargins(0, 0, 0, 0)
+            top_row.setSpacing(0)
+
+            lbl = QLabel(group_name.upper())
+            lbl.setObjectName("groupTitleLabel")
+            top_row.addWidget(lbl)
+            top_row.addStretch()
+
+            del_btn = QToolButton()
+            del_btn.setObjectName("groupDeleteBtn")
+            del_btn.setText("×")
+            del_btn.setFixedSize(18, 18)
+            del_btn.setCursor(Qt.PointingHandCursor)
+            del_btn.setToolTip(f"Delete group '{group_name}'")
+            del_btn.clicked.connect(lambda checked=False, g=group_name: self.delete_group(g))
+            top_row.addWidget(del_btn)
+            g_layout.addLayout(top_row)
+
+            line_edit = QLineEdit()
+            line_edit.setObjectName("keywordLineEdit")
+            line_edit.setText(", ".join(tags_list))
+            line_edit.setProperty("group_name", group_name)
+            g_layout.addWidget(line_edit)
+
+            self.groups_layout.addWidget(group_box)
+
+        self.groups_layout.addStretch()
+
+    def delete_group(self, group_name):
+        if group_name in self.keyword_groups:
+            self.push_undo_state()
+            del self.keyword_groups[group_name]
+            self.populate_groups()
+
+    def sync_ui_to_dict(self):
+        for i in range(self.groups_layout.count()):
+            item = self.groups_layout.itemAt(i)
+            if item and item.widget():
+                box = item.widget()
+                line_edit = box.findChild(QLineEdit)
+                if line_edit:
+                    g_name = line_edit.property("group_name")
+                    content = line_edit.text()
+                    tags = [t.strip() for t in content.split(",") if t.strip()]
+                    if g_name in self.keyword_groups:
+                        self.keyword_groups[g_name] = tags
+
+    def add_new_group(self):
+        self.push_undo_state()
+        dialog = PromptInputDialog(
+            title_text="New Group",
+            initial_value="",
+            badge_icon="📁",
+            confirm_text="Create",
+            single_line=True,  # <--- Forces single-line QLineEdit and Enter-to-create behavior
+            parent=self.parent()
+        )
+        if dialog.exec() == QDialog.Accepted:
+            new_cat = dialog.get_text().strip().lower()
+            if new_cat and new_cat not in self.keyword_groups:
+                self.keyword_groups[new_cat] = []
+                self.populate_groups()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        grip_size = 16
+        self.size_grip.setGeometry(self.width() - grip_size - 12, self.height() - grip_size - 12, grip_size, grip_size)
+        self.size_grip.raise_()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self.dragPosition is not None:
+            self.move(event.globalPosition().toPoint() - self.dragPosition)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.dragPosition = None
+        event.accept()
+
+    def get_updated_groups(self):
+        self.sync_ui_to_dict()
+        return self.keyword_groups
