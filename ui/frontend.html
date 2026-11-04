@@ -1,4 +1,4 @@
-<!--version = 1.2.47 -->
+<!--version = 1.2.49 -->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -1379,21 +1379,15 @@
                 backend.autoTagBatch(JSON.stringify(pathsToProcess), function(resultsJson) {
                     try {
                         const results = JSON.parse(resultsJson);
-                        const activeKeywords = keywordsCombo ? keywordsCombo.value.split(',').map(k => k.trim().toLowerCase()).filter(k => k.length > 0) : [];
-                        const strategy = currentSettingsData.tag_strategy || "add";
 
                         targets.forEach(idx => {
                             const img = datasetImages[idx];
                             if (img && results[img.relative_path]) {
                                 const returnedTagsStr = results[img.relative_path];
-                                const newTags = returnedTagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0);
-
-                                if (strategy === "replace") {
-                                    img.tags = cleanImageTags([...activeKeywords, ...newTags]);
-                                } else {
-                                    const remainingExisting = img.tags.filter(t => !activeKeywords.includes(t.toLowerCase()));
-                                    img.tags = cleanImageTags([...activeKeywords, ...newTags, ...remainingExisting]);
-                                }
+                                // --- FIX: Directly assign the final string returned by backend ---
+                                img.tags = cleanImageTags(
+                                    returnedTagsStr.split(',').map(t => t.trim()).filter(t => t.length > 0)
+                                );
                             }
                         });
 

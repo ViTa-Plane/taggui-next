@@ -7,7 +7,7 @@ from PIL import Image
 from PySide6.QtCore import QThread, Signal
 from huggingface_hub import hf_hub_download
 
-# version = 1.2.14
+# version = 1.2.18
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -573,24 +573,33 @@ class AutoTagWorker(QThread):
                         file_tags_str = tags_str
 
                         # --- FIX: Honor tag_strategy ("add" vs "replace") ---
-                        if tag_strategy == "add" and txt_path.exists():
+                        active_keywords_raw = [k.strip() for k in self.settings.get("keywords", "").split(",") if k.strip()]
+                        active_keywords_lower = {k.lower() for k in active_keywords_raw}
+
+                        # 1. Read existing tags from file if it exists
+                        existing_tags = []
+                        if txt_path.exists():
                             existing_content = str(txt_path.read_text(encoding="utf-8")).strip()
                             if existing_content:
-                                if "," in existing_content or "," in str(tags_str):
-                                    old_tags = [t.strip() for t in str(existing_content).replace("\n", ",").split(",")
-                                                if t.strip()]
-                                    new_tags = [t.strip() for t in str(tags_str).replace("\n", ",").split(",") if
-                                                t.strip()]
-                                    combined_tags = old_tags + [t for t in new_tags if t not in old_tags]
-                                    file_tags_str = ", ".join(combined_tags)
-                                else:
-                                    file_tags_str = f"{existing_content} {tags_str}"
+                                existing_tags = [t.strip() for t in existing_content.replace("\n", ",").split(",") if t.strip()]
+
+                        # Parse newly generated tags from the model
+                        new_tags = [t.strip() for t in str(tags_str).replace("\n", ",").split(",") if t.strip()]
+
+                        if tag_strategy == "replace":
+                            # 2 & 3. Keep only existing tags that are in the active keyword group
+                            remaining_tags = [t for t in existing_tags if t.lower() in active_keywords_lower]
+
+                            # 4. Add new tags from the autotagger to the remaining tags, avoiding duplicates
+                            combined = remaining_tags + [t for t in new_tags if t.lower() not in {r.lower() for r in remaining_tags}]
+                            file_tags_str = ", ".join(combined)
                         else:
-                            # Strategy is "replace" (or file doesn't exist) — keep freshly generated tags/caption as-is
-                            file_tags_str = tags_str
+                            # Add strategy: merge existing tags with new tags
+                            combined_tags = existing_tags + [t for t in new_tags if t.lower() not in {e.lower() for e in existing_tags}]
+                            file_tags_str = ", ".join(combined_tags)
                         # --------------------------------------------------
 
-                        # Write the tags/caption to disk
+                        # 5. Save the list to disk
                         txt_path.write_text(file_tags_str, encoding="utf-8")
                         results[rel_path] = file_tags_str
 
