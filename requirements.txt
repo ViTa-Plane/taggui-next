@@ -40,6 +40,10 @@ accelerate
 
 transformers==4.57.6
 
+# MiniCPM required
+sentencepiece
+bitsandbytes
 
-# sentencepiece==0.1.99 --only-binary :all:
-# bitsandbytes==0.43.1
+
+#flash-linear-attention[cuda]
+#causal-conv1d

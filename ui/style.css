@@ -543,3 +543,20 @@ body.modal-open header {
   transform: translateX(14px);
   background-color: var(--text-white);
 }
+
+/*keyword combobox style*/
+
+#keywords-combo.text-input {
+  flex: 1;
+  cursor: pointer;
+  background-color: rgb(18 62 53 / 0.28);
+  color: #16a47e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  max-height: 26px;
+  background-image: none;
+  -webkit-appearance: none;
+  appearance: none;
+}

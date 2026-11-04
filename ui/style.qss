@@ -137,7 +137,6 @@ SettingsDialog QLabel {
     font-size: 11px;
 }
 
-/* Constrain ComboBox & SpinBox widths to prevent horizontal layout overflow */
 SettingsDialog QComboBox {
     background-color: #181a24;
     color: #e2e8f0;
@@ -178,29 +177,6 @@ SettingsDialog QSpinBox {
 }
 SettingsDialog QSpinBox:focus {
     border: 1px solid #6366f1;
-}
-SettingsDialog QSpinBox::up-button {
-    subcontrol-origin: border;
-    subcontrol-position: top right;
-    width: 16px;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    border-top-right-radius: 5px;
-    background: rgba(255, 255, 255, 0.03);
-}
-SettingsDialog QSpinBox::up-button:hover {
-    background: rgba(99, 102, 241, 0.3);
-}
-SettingsDialog QSpinBox::down-button {
-    subcontrol-origin: border;
-    subcontrol-position: bottom right;
-    width: 16px;
-    border-left: 1px solid rgba(255, 255, 255, 0.08);
-    border-bottom-right-radius: 5px;
-    background: rgba(255, 255, 255, 0.03);
-}
-SettingsDialog QSpinBox::down-button:hover {
-    background: rgba(99, 102, 241, 0.3);
 }
 
 SettingsDialog QCheckBox {
@@ -249,4 +225,66 @@ SettingsDialog QSlider::handle:horizontal:hover {
 
 QWidget#scrollContent {
     background-color: #12141c;
+}
+
+/* ==========================================================================
+   KeywordGroupsDialog Form Controls & Cards (Compact Padding)
+   ========================================================================== */
+
+QGroupBox#groupCardBox {
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 8px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    background-color: rgba(99, 102, 241, 0.04);
+    padding: 0px 0px 0px 0px;
+}
+
+QLabel#groupTitleLabel {
+    color: #818cf8;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+QToolButton#groupDeleteBtn {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #f87171;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 4px;
+    padding: 0px;
+    line-height: 1;
+    padding-bottom: 5px;
+}
+
+QToolButton#groupDeleteBtn:hover {
+    background: rgba(239, 68, 68, 0.4);
+    color: #ffffff;
+}
+
+QLineEdit#keywordLineEdit {
+    background-color: #0d0e12;
+    color: #a5b4fc;
+    font-family: monospace;
+    font-size: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 4px 8px;
+}
+
+QLineEdit#keywordLineEdit:focus {
+    border: 1px solid #6366f1;
+}
+
+/* Standard App-Wide Dialog Close Button */
+QToolButton#dialogCloseBtn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 16px;
+    font-weight: bold;
+}
+QToolButton#dialogCloseBtn:hover {
+    color: #ffffff;
 }
