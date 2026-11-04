@@ -15,7 +15,7 @@ from huggingface_hub.constants import HF_HUB_CACHE
 from autotagger import AutoTagWorker
 from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog
 
-# version = 1.2.25
+# version = 1.2.26
 
 # ==============================================================================
 #  DEBUG CONFIGURATION
@@ -294,7 +294,7 @@ class TagGUIBridge(QObject):
         ]
 
         minicpm_names = [
-            "openbmb/MiniCPM-V-2_6-int4",
+            # "openbmb/MiniCPM-V-2_6-int4",
         ]
 
         results = []
