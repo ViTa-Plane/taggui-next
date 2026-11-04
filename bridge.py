@@ -13,9 +13,9 @@ from PySide6.QtGui import QIcon, QColor
 from huggingface_hub.constants import HF_HUB_CACHE
 
 from autotagger import AutoTagWorker
-from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, EditPromptDialog
+from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog
 
-# version = 1.2.1
+# version = 1.2.25
 
 # ==============================================================================
 #  DEBUG CONFIGURATION
@@ -162,6 +162,10 @@ class TagGUIBridge(QObject):
     def getDatasetSettings(self):
         default_settings = {
             "keywords": "",
+            "keyword_groups": {
+                "general": ["masterpiece", "best quality"],
+                "characters": ["1girl", "solo"]
+            },
             "use_e621": False,
             "model_name": "SmilingWolf/wd-eva02-large-tagger-v3",
             "general_threshold": 0.35,
@@ -249,27 +253,27 @@ class TagGUIBridge(QObject):
         ]
 
         blip_names = [
-            "Salesforce/blip-image-captioning-large",
-            "unography/blip-long-cap",
-            "ifmain/blip-image2promt-stable-diffusion-base"
+            "Salesforce/blip-image-captioning-large",           # Extremely lightweight, fast, and stable. Uses a ViT-large vision backbone. It outputs concise, accurate, and clean natural-language sentences.
+            "unography/blip-long-cap",                          # Fine-tuned specifically to output longer, more descriptive paragraphs rather than short single-sentence descriptions
+            "ifmain/blip-image2promt-stable-diffusion-base"     # Specialized fine-tune designed to output comma-separated tags or prompt tokens useful for Stable Diffusion generation rather than strict descriptive prose
         ]
 
         blip2_names = [
             "Salesforce/blip2-opt-2.7b",
-            "Salesforce/blip2-opt-2.7b-coco",
+            "Salesforce/blip2-opt-2.7b-coco",       # fine-tuned specifically on COCO dataset styles
             "Salesforce/blip2-opt-6.7b",
-            "Salesforce/blip2-opt-6.7b-coco",
-            "Salesforce/blip2-flan-t5-xl",
-            "Salesforce/blip2-flan-t5-xl-coco",
-            "Salesforce/blip2-flan-t5-xxl",
+            "Salesforce/blip2-opt-6.7b-coco",       # fine-tuned specifically on COCO dataset styles
+            "Salesforce/blip2-flan-t5-xl",          # (~3B total parameters) instruction-tuned model
+            "Salesforce/blip2-flan-t5-xl-coco",     # fine-tuned specifically on COCO dataset styles
+            "Salesforce/blip2-flan-t5-xxl",         # (~11B parameters) instruction-tuned model, making these variants substantially better at following structured text commands (e.g., answering questions or adhering to specific prompt formats).
         ]
 
         joycaption_names = [
-            "fancyfeast/llama-joycaption-alpha-two-hf-llava",
-            "fancyfeast/llama-joycaption-beta-one-hf-llava",
-            "NeoChen1024/llama-joycaption-beta-one-hf-llava-FP8-Dynamic",
-            "NeoChen1024/llama-joycaption-beta-one-hf-llava-GPTQ-4bit-sym-autoround",
-            "mradermacher/llama-joycaption-beta-one-hf-llava-GGUF"
+            # "fancyfeast/llama-joycaption-alpha-two-hf-llava",
+            # "fancyfeast/llama-joycaption-beta-one-hf-llava",
+            # "NeoChen1024/llama-joycaption-beta-one-hf-llava-FP8-Dynamic",
+            # "NeoChen1024/llama-joycaption-beta-one-hf-llava-GPTQ-4bit-sym-autoround",
+            # "mradermacher/llama-joycaption-beta-one-hf-llava-GGUF"
         ]
 
         florence2_names = [
@@ -287,15 +291,10 @@ class TagGUIBridge(QObject):
         qwen_names = [
             "Qwen/Qwen3-VL-4B-Instruct",
             "DreamFast/Qwen3-VL-4b-Heretic",
-            "DreamFast/qwen3-4b-heretic"
         ]
 
         minicpm_names = [
             "openbmb/MiniCPM-V-2_6-int4",
-        ]
-
-        internlm_names = [
-            "internlm/internlm-xcomposer2-vl-7b-4bit",
         ]
 
         results = []
@@ -421,26 +420,19 @@ class TagGUIBridge(QObject):
                 "installed": installed
             })
 
-        for name in internlm_names:
-            installed = self._is_hf_model_downloaded(name)
-            internlm_commands = [
-                "Please describe this image in detail.",
-            ]
-            results.append({
-                "id": name,
-                "name": name,
-                "category": "internlm",
-                "family": "InternLM ",
-                "commands": internlm_commands,
-                "installed": installed
-            })
-
         return json.dumps(results)
 
     @Slot(str, str)
     def saveImageTags(self, relative_path, tags_comma_separated):
         txt_path = self._dataset_path / Path(relative_path).with_suffix(".txt")
-        txt_path.write_text(tags_comma_separated, encoding="utf-8")
+        cleaned_tags = tags_comma_separated.strip()
+
+        if not cleaned_tags:
+            # If tags are empty, remove the text file if it exists so we don't keep empty files
+            if txt_path.exists():
+                txt_path.unlink()
+        else:
+            txt_path.write_text(cleaned_tags, encoding="utf-8")
 
     @Slot(str)
     def saveBatchImageTags(self, updates_json_str):
@@ -448,7 +440,13 @@ class TagGUIBridge(QObject):
             updates = json.loads(updates_json_str)
             for rel_path, tags_str in updates.items():
                 txt_path = self._dataset_path / Path(rel_path).with_suffix(".txt")
-                txt_path.write_text(tags_str, encoding="utf-8")
+                cleaned_tags = tags_str.strip()
+
+                if not cleaned_tags:
+                    if txt_path.exists():
+                        txt_path.unlink()
+                else:
+                    txt_path.write_text(cleaned_tags, encoding="utf-8")
         except Exception as e:
             print(f"[Backend] Batch save failed: {e}")
 
@@ -464,7 +462,9 @@ class TagGUIBridge(QObject):
 
     @Slot(str, result=bool)
     def confirmAutoTagModal(self, count):
-        dialog = TaggingConfirmDialog(count, parent=self.parent_window)
+        settings = json.loads(self.getDatasetSettings())
+        model_name = settings.get("model_name", "selected model")
+        dialog = TaggingConfirmDialog(count, model_name=model_name, parent=self.parent_window)
         return dialog.exec() == QDialog.Accepted
 
     @Slot(str, result=bool)
@@ -757,9 +757,33 @@ class TagGUIBridge(QObject):
     @Slot(str, str, result=str)
     def openNativeEditPromptDialog(self, title_text, initial_value):
         try:
-            dialog = EditPromptDialog(title_text, initial_value, parent=self.parent_window)
+            # Ensure you are using your unified PromptInputDialog class
+            dialog = PromptInputDialog(
+                title_text=title_text,
+                initial_value=initial_value,
+                badge_icon="✏️",
+                confirm_text="Save Changes",
+                parent=self.parent_window
+            )
             if dialog.exec() == QDialog.Accepted:
-                return dialog.get_edited_text()
+                return dialog.get_text() # <--- Changed from get_edited_text() to get_text()
         except Exception as e:
             print(f"[Backend] Error opening native edit prompt dialog: {e}")
         return ""
+
+    @Slot()
+    def openNativeKeywordGroupsDialog(self):
+        try:
+            settings_json = self.getDatasetSettings()
+            current_settings = json.loads(settings_json)
+            current_groups = current_settings.get("keyword_groups", {})
+
+            dialog = KeywordGroupsDialog(current_groups, parent=self.parent_window)
+            if dialog.exec() == QDialog.Accepted:
+                updated_groups = dialog.get_updated_groups()
+                current_settings["keyword_groups"] = updated_groups
+                self.saveDatasetSettings(json.dumps(current_settings))
+                if DEBUG_MODE:
+                    print("[Backend] Keyword groups saved successfully.")
+        except Exception as e:
+            print(f"[Backend] Error opening keyword groups dialog: {e}")
