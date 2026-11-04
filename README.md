@@ -6,13 +6,13 @@
 
 **TagGUI-Next** by default uses SmilingWolf / wd-eva02-large-tagger-v3 for an image interrogator. It's best for danbooru/e621 style tags, useful in preparation of image datasets for LoRa Training (for Pony XL v6/ Illustrious/ NoobAi and SDXL 1.0).
 
-**TagGUI-Next**'s Auto Tagger is tested to work with those models:
+**TagGUI-Next**'s Auto Tagger is tested to work with those VLM img2txt models:
  - [BLIP](https://huggingface.co/Salesforce/blip-image-captioning-large)/[BLIP-2](https://huggingface.co/paragon-AI/blip2-image-to-text)
  - [Florence-2](https://huggingface.co/microsoft/Florence-2-large-ft)
  - [Moondream2](https://huggingface.co/vikhyatk/moondream2)
  - All WD Tagger models [SmilingWolf's](https://huggingface.co/SmilingWolf)
   ## untested/fail
- - Llama JoyCaption Beta One [Llama JoyCaption](https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava)
+ - All Llama JoyCaption VLM models [Llama JoyCaption](https://huggingface.co/fancyfeast/llama-joycaption-beta-one-hf-llava)
 
 ---
 
@@ -40,12 +40,11 @@
 
 - Arrow Keys,Navigate through dataset images
 - Shift + Click,Multi-select range of images / add tag to selection
-- Ctrl + Click on a tag,adds keyword to the keyword list
-- Ctrl + Alt + Click on a tag, removes keyword to the keyword list
-- Shift + Click on a global tag (the left tag list), adds the tag to the image tags
-- Shift+ Alt + Click on a global tag (the left tag list), removes the tag from the image tags
+- Ctrl + Click on a tag,adds/removes keyword to the keyword list
+- Shift + Click on a global tag (the left tag list), adds/removes the tag to the image tags
 - double click on a tag opens an edit tag window.
-- drag-and-drop image tags in the right panel to re-order them
+- double click on an image opens an edit all image tags window.
+- drag-and-drop tags in the right panel to re-order them
 - Delete / Backspace,Delete selected global tag from all images
 - Escape,Clear filters and selections
 - Ctrl + Z / Ctrl + Shift +Z , Undo/Redo commands
@@ -77,7 +76,7 @@ To change the interrogator settings click the settings button
 <img src='assets/TagGUI-Next_settings.png' alt='TagGUI-Next settings' width='100%'>
 
 ---
-##  Pro-Tip for Massive Models (BLIP-2 / Qwen 7B)
+## Massive Models (BLIP-2 / Qwen 7B)
 If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter captioning models alongside PySide6/WebEngine can easily hit out-of-memory (OOM) limits. If you experience freezes or crashes with larger vision models, consider:
 
 - Using smaller, lightweight alternatives like Moondream2 (vikhyatk/moondream2) or Florence-2-base (microsoft/Florence-2-base-ft) which load lightning-fast and run comfortably under 4–6GB VRAM.
@@ -88,7 +87,7 @@ If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter c
 ## Installation & Setup
 
 **Clone the repository:**
-   ```bash
+   ```
      git clone https://github.com/ViTa-Plane/taggui-next.git
      cd taggui-next
   ```
@@ -149,16 +148,6 @@ Therefore, users can run the application seamlessly on a clean machine (such as 
 
 ---
 
-Since we are locked to `transformers v4.57.6`, any *new* vision-language or causal model we integrate that relies on `trust_remote_code=True` will likely share Moondream's DNA (custom text models divorced from `GenerationMixin` or customized caches).
-
-### My conclusion:
 - use  WD Tagger models for speed and stability for danbooru / e621 style tags used in SDXL models
-- use BLIP and Florence-2 for natural language prompts for FLUX/Qwen models.
-- it's a lot of work and monkey-patching to keep the old models working
-- keep it simple...stupid
+- use Qwen , BLIP and Florence-2 for natural language captions.
 
-### To do list:
--  auto-complete  danbooru / e621 style tags in  'add a tag' function
--  better keyboard shortcuts (i dunno, i need feedback)
--  ?
--  profit 
