@@ -15,7 +15,7 @@ from huggingface_hub.constants import HF_HUB_CACHE
 from autotagger import AutoTagWorker
 from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog
 
-# version = 1.2.26
+# version = 1.2.27
 
 # ==============================================================================
 #  DEBUG CONFIGURATION
@@ -293,10 +293,6 @@ class TagGUIBridge(QObject):
             "DreamFast/Qwen3-VL-4b-Heretic",
         ]
 
-        minicpm_names = [
-            # "openbmb/MiniCPM-V-2_6-int4",
-        ]
-
         results = []
         for name, thresh in wd_taggers:
             installed = self._is_hf_model_downloaded(name)
@@ -403,20 +399,6 @@ class TagGUIBridge(QObject):
                 "category": "captioner",
                 "family": "JoyCaption",
                 "commands": joycaption_commands,
-                "installed": installed
-            })
-
-        for name in minicpm_names:
-            installed = self._is_hf_model_downloaded(name)
-            minicpm_commands = [
-                "What is in the image?",
-            ]
-            results.append({
-                "id": name,
-                "name": name,
-                "category": "minicpm",
-                "family": "MiniCPM ",
-                "commands": minicpm_commands,
                 "installed": installed
             })
 

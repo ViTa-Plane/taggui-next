@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon, QColor
 
-# version = 1.2.30
+# version = 1.2.31
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -917,7 +917,7 @@ class SettingsDialog(QDialog):
         model_info = next((m for m in self.available_interrogators if m["id"] == selected_id), None)
         category = model_info.get("category", "") if model_info else ""
 
-        if category in ["qwen", "joycaption", "llama", "minicpm",]:
+        if category in ["qwen", "joycaption", "llama",]:
             self.thinking_cb.setChecked(False)
             self.temp_slider.setValue(7)
             self.top_p_slider.setValue(8)
@@ -975,7 +975,7 @@ class SettingsDialog(QDialog):
         if hasattr(self, "captioner_add_custom_btn"):
             self.captioner_add_custom_btn.setVisible(supports_custom_prompts)
 
-        if category in ["qwen", "joycaption", "llama", "minicpm",]:
+        if category in ["qwen", "joycaption", "llama",]:
             self.settings_stack.setCurrentWidget(self.qwen_group)
             self.qwen_group.setVisible(True)
             self.tagger_group.setVisible(False)

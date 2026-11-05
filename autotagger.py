@@ -1,3 +1,4 @@
+import os
 import csv
 import gc
 import json
@@ -7,7 +8,7 @@ from PIL import Image
 from PySide6.QtCore import QThread, Signal
 from huggingface_hub import hf_hub_download
 
-# version = 1.2.19
+# version = 1.2.27
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -15,10 +16,16 @@ from huggingface_hub import hf_hub_download
 DEBUG_MODE = False  # Set to True for verbose logs, False for clean logs
 
 # ==============================================================================
+# HF_HUB_OFFLINE=1 environment variable tells all Hugging Face components
+# to skip network calls entirely and read exclusively from the local cache
+# ==============================================================================
+# Check if offline mode is requested via environment variable
+is_offline = os.environ.get("HF_HUB_OFFLINE", "0") == "1"
+
+
+# ==============================================================================
 # MAIN AUTOTAGGER CLASS
 # ==============================================================================
-
-
 class AutoTagWorker(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(str)
@@ -48,7 +55,7 @@ class AutoTagWorker(QThread):
             device = "cuda" if torch.cuda.is_available() else "cpu"
             dtype = torch.float16 if device == "cuda" else torch.float32
 
-            is_vlm = any(k in model_name.lower() for k in ["blip", "florence", "moondream", "joycaption", "qwen", "minicpm"])
+            is_vlm = any(k in model_name.lower() for k in ["blip", "florence", "moondream", "joycaption", "qwen"])
 
             model = None
             processor = None
@@ -63,29 +70,29 @@ class AutoTagWorker(QThread):
                 # -----------------blip-----------------------
                 if "blip" in model_name.lower() and "blip2" not in model_name.lower():
                     from transformers import BlipProcessor, BlipForConditionalGeneration
-                    processor = BlipProcessor.from_pretrained(model_name, trust_remote_code=True)
+                    processor = BlipProcessor.from_pretrained(model_name, trust_remote_code=True, local_files_only=is_offline)
                     model = BlipForConditionalGeneration.from_pretrained(
-                        model_name, torch_dtype=dtype, trust_remote_code=True
+                        model_name, torch_dtype=dtype, trust_remote_code=True, local_files_only=is_offline
                     ).to(device)
 
                 else:
                     from transformers import AutoProcessor
-                    processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+                    processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True, local_files_only=is_offline)
 
                     # -----------------blip2-----------------------
                     if "blip2" in model_name.lower():
                         from transformers import Blip2ForConditionalGeneration
                         model = Blip2ForConditionalGeneration.from_pretrained(
-                            model_name, torch_dtype=dtype, trust_remote_code=True
+                            model_name, torch_dtype=dtype, trust_remote_code=True, local_files_only=is_offline
                         ).to(device)
                     # -----------------------------
 
                     # -----------------joycaption-----------------------
                     elif "joycaption" in model_name.lower() or "llava" in model_name.lower():
                         from transformers import AutoProcessor, LlavaForConditionalGeneration
-                        processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+                        processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True, local_files_only=is_offline)
                         model = LlavaForConditionalGeneration.from_pretrained(
-                            model_name, torch_dtype=dtype, trust_remote_code=True
+                            model_name, torch_dtype=dtype, trust_remote_code=True, local_files_only=is_offline
                         ).to(device)
                     # -----------------------------
 
@@ -97,6 +104,7 @@ class AutoTagWorker(QThread):
                             model_name,
                             torch_dtype=dtype,
                             trust_remote_code=True,
+                            local_files_only=is_offline,  # True if offline mode is on, False if online
                             attn_implementation="eager"
                         ).to(device)
 
@@ -139,12 +147,13 @@ class AutoTagWorker(QThread):
 
                         # 1. Safe Processor Load with fallback
                         try:
-                            processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
+                            processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True, local_files_only=is_offline)
                         except Exception:
                             # If config.json lacks model_type, force Qwen2/3-VL processor resolution
                             processor = AutoProcessor.from_pretrained(
                                 model_name,
                                 trust_remote_code=True,
+                                local_files_only=is_offline,  # True if offline mode is on, False if online
                                 model_type="qwen2_vl"
                             )
 
@@ -168,7 +177,8 @@ class AutoTagWorker(QThread):
                             model = AutoModelForVision2Seq.from_pretrained(
                                 model_name,
                                 torch_dtype=dtype,
-                                trust_remote_code=True
+                                trust_remote_code=True,
+                                local_files_only = is_offline,  # True if offline mode is on, False if online
                             ).to(device)
                         except Exception:
                             try:
@@ -176,13 +186,15 @@ class AutoTagWorker(QThread):
                                 model = Qwen2VLForConditionalGeneration.from_pretrained(
                                     model_name,
                                     torch_dtype=dtype,
-                                    trust_remote_code=True
+                                    trust_remote_code=True,
+                                    local_files_only=is_offline,  # True if offline mode is on, False if online
                                 ).to(device)
                             except Exception:
                                 model = AutoModelForCausalLM.from_pretrained(
                                     model_name,
                                     torch_dtype=dtype,
-                                    trust_remote_code=True
+                                    trust_remote_code=True,
+                                    local_files_only=is_offline,  # True if offline mode is on, False if online
                                 ).to(device)
                     # -----------------------------
 
@@ -193,6 +205,7 @@ class AutoTagWorker(QThread):
                         model = AutoModelForCausalLM.from_pretrained(
                             model_name,
                             trust_remote_code=True,
+                            local_files_only = is_offline,
                             torch_dtype=dtype,
                             attn_implementation="eager",
                             force_download=False
@@ -227,34 +240,18 @@ class AutoTagWorker(QThread):
                             if not hasattr(model.text_model, "generate"):
                                 model.text_model.generate = lambda *args, **kwargs: model.generate(*args, **kwargs)
                     # -----------------------------
-
-                    # --- MINICPM LOADING BLOCK ---
-                    elif "minicpm" in model_name.lower():
-                        from transformers import AutoModel, AutoProcessor
-                        processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
-                        model = AutoModel.from_pretrained(
-                            model_name,
-                            torch_dtype=dtype,
-                            trust_remote_code=True,
-                            device_map="auto" if device == "cuda" else None
-                        )
-                        if device == "cpu":
-                            model = model.to(device)
-                    # -----------------------------
-
                     # model loading branches
-
 
                     else:
                         try:
                             from transformers import AutoModelForVision2Seq
                             model = AutoModelForVision2Seq.from_pretrained(
-                                model_name, torch_dtype=dtype, trust_remote_code=True
+                                model_name, torch_dtype=dtype, trust_remote_code=True, local_files_only=is_offline
                             ).to(device)
                         except ImportError:
                             from transformers import AutoModelForCausalLM
                             model = AutoModelForCausalLM.from_pretrained(
-                                model_name, torch_dtype=dtype, trust_remote_code=True
+                                model_name, torch_dtype=dtype, trust_remote_code=True, local_files_only=is_offline
                             ).to(device)
             else:
                 import timm
@@ -262,7 +259,7 @@ class AutoTagWorker(QThread):
                 self.log_signal.emit(f"[Backend] Loading tagger model: {model_name}...")
                 hf_model_str = f"hf-hub:{model_name}"
                 tagger_model = timm.create_model(hf_model_str, pretrained=True).eval().to(device)
-                csv_path = hf_hub_download(model_name, "selected_tags.csv")
+                csv_path = hf_hub_download(model_name, "selected_tags.csv", local_files_only=is_offline)
                 with open(csv_path, mode="r", encoding="utf-8") as f:
                     reader = csv.DictReader(f)
                     for row in reader:
@@ -498,25 +495,6 @@ class AutoTagWorker(QThread):
                                 )
                                 generated_text = decoded_outputs[0].strip() if decoded_outputs else ""
                             # ---------------------------------------------
-
-                            # --- MINICPM GENERATION BLOCK ---
-                            elif "minicpm" in model_name.lower():
-                                prompt = task_command if task_command else "What is in the image?"
-                                msgs = [{'role': 'user', 'content': [image, prompt]}]
-                                thinking_mode = self.settings.get("thinking_mode", False)
-                                temperature = self.settings.get("temperature", 0.6 if thinking_mode else 0.7)
-                                max_new_tokens = self.settings.get("qwen_max_new_tokens", 256)
-
-                                generated_text = model.chat(
-                                    image=image,
-                                    msgs=msgs,
-                                    processor=processor,
-                                    temperature=temperature,
-                                    max_new_tokens=max_new_tokens,
-                                    sampling=True
-                                )
-                            # --------------------------------
-
                             
                             else:
                                 inputs = processor(images=image, return_tensors="pt").to(device, dtype)
