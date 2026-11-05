@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon, QColor
 
-# version = 1.2.31
+# version = 1.2.32
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -982,7 +982,7 @@ class SettingsDialog(QDialog):
             self.captioner_group.setVisible(False)
 
             # Title update for clarity
-            self.qwen_group.setTitle(f"{family_name} (LLM) Generation Settings")
+            self.qwen_group.setTitle(f"{family_name} (VLM) Generation Settings")
 
             # Show Max & Min tokens, Temp, Top-P, Top-K
             self.qwen_max_tokens_spin.setVisible(True)

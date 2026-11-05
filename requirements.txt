@@ -1,24 +1,24 @@
 # Core GUI & Utilities
 PySide6
-pillow
 requests
-numpy
-huggingface_hub
-hf_xet
+ninja
+numpy>=2.5.4
+huggingface_hub>=0.36.2
+hf_xet>=1.8.0
 
-# Model Architectures & Computer Vision
-timm
-einops
+# Computer Vision & Image Processing
+pillow>=13.0.0
+opencv-python-headless
+einops>=0.8.2
+timm>=1.0.31
 
 # ==============================================================================
 # PyTorch Configuration
 # ==============================================================================
 # The configuration below targets CUDA 13.0. 
-# run cuda_check.bat or cuda_check.sh to check your CUDA version
+# run cuda_check.bat to check your CUDA version
 # If you are on a different system, swap out the repository line:
 #   - CUDA 12.x:      Change to --extra-index-url https://download.pytorch.org/whl/cu121 (or cu124/cu126)
-#   - CPU-only:       Replace with --index-url https://download.pytorch.org/whl/cpu
-#   - Apple Silicon:  Remove the extra-index-url entirely (pip installs MPS-compatible torch by default)
 # ----------------------------------------------------------------------
 
 # --extra-index-url https://download.pytorch.org/whl/cu121
@@ -29,8 +29,8 @@ einops
 torch==2.14.1
 torchvision==0.29.1
 
-compressed-tensors
-accelerate
+compressed-tensors==0.20.1
+accelerate==1.15.0
 
 # ==============================================================================
 # transformers
@@ -39,11 +39,3 @@ accelerate
 # ==============================================================================
 
 transformers==4.57.6
-
-# MiniCPM required
-sentencepiece
-bitsandbytes
-
-
-#flash-linear-attention[cuda]
-#causal-conv1d
