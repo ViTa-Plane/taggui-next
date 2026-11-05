@@ -8,7 +8,7 @@ from PIL import Image
 from PySide6.QtCore import QThread, Signal
 from huggingface_hub import hf_hub_download
 
-# version = 1.2.27
+# version = 1.2.43
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -22,7 +22,6 @@ DEBUG_MODE = False  # Set to True for verbose logs, False for clean logs
 # Check if offline mode is requested via environment variable
 is_offline = os.environ.get("HF_HUB_OFFLINE", "0") == "1"
 
-
 # ==============================================================================
 # MAIN AUTOTAGGER CLASS
 # ==============================================================================
@@ -30,12 +29,14 @@ class AutoTagWorker(QThread):
     log_signal = Signal(str)
     finished_signal = Signal(str)
 
-    def __init__(self, bridge, paths, settings):
+    def __init__(self, bridge, paths, settings,device, dtype):
         super().__init__()
         self.bridge = bridge
         self.paths = paths
         self.settings = settings
         self._is_cancelled = False
+        self.device = device
+        self.dtype = dtype
 
     def cancel(self):
         self._is_cancelled = True
@@ -352,23 +353,27 @@ class AutoTagWorker(QThread):
                                 max_new_tokens = self.settings.get("captioner_max_new_tokens", 150)
                                 num_beams = self.settings.get("captioner_num_beams", 3)
 
-                                generated_ids = model.generate(
-                                    input_ids=inputs["input_ids"],
-                                    pixel_values=inputs["pixel_values"],
-                                    max_new_tokens=max_new_tokens,  # <--- Dynamic
-                                    num_beams=num_beams,            # <--- Dynamic
-                                    use_cache=False
-                                )
+                                # Run generation inside torch.no_grad() to save RAM and prevent tracking bugs
+                                with torch.no_grad():
+                                    generated_ids = model.generate(
+                                        input_ids=inputs["input_ids"],
+                                        pixel_values=inputs["pixel_values"],
+                                        max_new_tokens=max_new_tokens,  # <--- Dynamic
+                                        num_beams=num_beams,            # <--- Dynamic
+                                        use_cache=False
+                                    )
                                 raw_text = processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
                                 parsed = processor.post_process_generation(
                                     raw_text, task=prompt, image_size=(768, 768)
                                 )
+                                # print(f"{model_name.lower()} DONE")
                                 if isinstance(parsed, dict) and prompt in parsed:
                                     generated_text = parsed[prompt]
                                 elif isinstance(parsed, dict):
                                     generated_text = list(parsed.values())[0]
                                 else:
                                     generated_text = str(parsed)
+
                             # ---------------------------------------------
 
                             # --- moondream GENERATION BLOCK ---

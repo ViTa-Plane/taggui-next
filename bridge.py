@@ -15,12 +15,29 @@ from huggingface_hub.constants import HF_HUB_CACHE
 from autotagger import AutoTagWorker
 from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog
 
-# version = 1.2.27
+# version = 1.2.30
 
 # ==============================================================================
 #  DEBUG CONFIGURATION
 # ==============================================================================
 DEBUG_MODE = False  # Set to True for verbose logs, False for clean logs
+
+
+# 1. Automatically detect if an NVIDIA GPU is available
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# 2. Automatically select the optimal precision data type
+if device == "cuda":
+    # Use bfloat16 if supported by your GPU (Ampere/RTX 30-series or newer), otherwise float16
+    dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+else:
+    # CPU strictly requires float32 for model execution stability
+    dtype = torch.float32
+
+print(f"Running on target device: {device.upper()} using precision: {dtype}")
+
+
+
 
 # ==============================================================================
 # MAIN BRIDGE CLASS
@@ -277,6 +294,7 @@ class TagGUIBridge(QObject):
         ]
 
         florence2_names = [
+            "multimodalart/Florence-2-large-no-flash-attn",
             "microsoft/Florence-2-base-ft",
             "microsoft/Florence-2-base",
             "microsoft/Florence-2-large-ft",
@@ -291,6 +309,7 @@ class TagGUIBridge(QObject):
         qwen_names = [
             "Qwen/Qwen3-VL-4B-Instruct",
             "DreamFast/Qwen3-VL-4b-Heretic",
+            "monkeyslikebananas/Qwen3-VL-8B-NSFW-Caption-V4.5",
         ]
 
         results = []
@@ -652,7 +671,7 @@ class TagGUIBridge(QObject):
                 return json.dumps({})
 
             settings = json.loads(self.getDatasetSettings())
-            self.worker = AutoTagWorker(self, paths, settings)
+            self.worker = AutoTagWorker(self, paths, settings, device, dtype)
 
             progress_dialog = TaggingProgressDialog(worker_ref=self.worker, parent=self.parent_window)
             progress_dialog.show()
