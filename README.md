@@ -75,15 +75,6 @@ To change the interrogator settings click the settings button
 >
 <img src='assets/TagGUI-Next_settings.png' alt='TagGUI-Next settings' width='100%'>
 
----
-## Massive Models (BLIP-2 / Qwen 7B)
-If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter captioning models alongside PySide6/WebEngine can easily hit out-of-memory (OOM) limits. If you experience freezes or crashes with larger vision models, consider:
-
-- Using smaller, lightweight alternatives like Moondream2 (vikhyatk/moondream2) or Florence-2-base (microsoft/Florence-2-base-ft) which load lightning-fast and run comfortably under 4–6GB VRAM.
-
-- Keeping the SmilingWolf Taggers for fast, high-performance tag management
-
----
 ## Installation & Setup
 
 **Clone the repository:**
@@ -119,6 +110,12 @@ If your GPU has limited VRAM (e.g., 8GB or 12GB), running massive 7B-parameter c
   - It does not rely on or look for an externally installed Google Chrome or Chromium browser on the host system.
 Therefore, users can run the application seamlessly on a clean machine (such as a fresh Windows, macOS, or Linux installation) without needing Google Chrome installed at all.
 
+## What are the VLMs (Vision-Language Models) Image interrogators?
+Models like Qwen-VL, Florence-2, BLIP, and Moondream. They are  are multimodal and combine a vision encoder (to "see" and process image pixels) with a language model decoder (to generate text). Their primary input is visual data used to produce descriptive text or tag.
+
+- LLM (Large Language Model): Text-in, text-out (e.g., standard GPT text or a text-only Llama).
+- VLM (Vision-Language Model): Image + text-in, text-out (e.g., Qwen-VL, Florence-2, BLIP).
+
 ## Models compatibility 
 
 **TagGUI-Next** uses  **Transformers v4.57.6** . Because v4.5x sits firmly past the major structural overhauls (where legacy cache managers, base mixins, and configuration validation rules were heavily modernized), some models in the auto-tagger pipeline might cause problems.
@@ -148,6 +145,11 @@ Therefore, users can run the application seamlessly on a clean machine (such as 
 
 ---
 
-- use  WD Tagger models for speed and stability for danbooru / e621 style tags used in SDXL models
+## Qwen  vs  WD Tagger
+
 - use Qwen , BLIP and Florence-2 for natural language captions.
+- use WD Tagger models for speed and stability for danbooru / e621 style tags used in SDXL models
+
+---
+
 
