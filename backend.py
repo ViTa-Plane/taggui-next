@@ -1,16 +1,36 @@
-from pathlib import Path
-import sys
+# Standard Library
 import copy
-from PySide6.QtCore import QObject, Slot, Signal, Property, QThread, QEventLoop, Qt
-from PySide6.QtWidgets import (
-    QFileDialog, QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
-    QPushButton, QFrame, QComboBox, QSlider, QCheckBox, QSpinBox, QToolButton,
-    QGroupBox, QScrollArea, QWidget, QStackedWidget, QMessageBox, QInputDialog,
-    QSizeGrip,QLineEdit
-)
-from PySide6.QtGui import QIcon, QColor
+from pathlib import Path
 
-# version = 1.2.38
+# PySide6 - Core
+from PySide6.QtCore import  QSize,  Qt, QTimer , QEvent
+
+# PySide6 - GUI
+from PySide6.QtGui import QColor, QIcon, QPixmap
+
+# PySide6 - Widgets
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizeGrip,
+    QSlider,
+    QSpinBox,
+    QStackedWidget,
+    QTextEdit,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
+# version = 1.2.64
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -1129,8 +1149,8 @@ class KeywordGroupsDialog(QDialog):
             self.setWindowIcon(QIcon(str(icon_path)))
 
         self.keyword_groups = copy.deepcopy(current_keyword_groups) or {
-            "general": ["masterpiece", "best quality"],
-            "characters": ["1girl", "solo"]
+            "general": "masterpiece, best quality",
+            "characters": "1girl, solo"
         }
 
         # --- Local Undo/Redo Stacks for Groups ---
@@ -1330,9 +1350,9 @@ class KeywordGroupsDialog(QDialog):
                 if line_edit:
                     g_name = line_edit.property("group_name")
                     content = line_edit.text()
-                    tags = [t.strip() for t in content.split(",") if t.strip()]
+                    parts = [t.strip() for t in content.split(",") if t.strip()]
                     if g_name in self.keyword_groups:
-                        self.keyword_groups[g_name] = tags
+                        self.keyword_groups[g_name] = ", ".join(parts)  # <--- Fixed: saved as comma-separated string
 
     def add_new_group(self):
         self.push_undo_state()
@@ -1347,7 +1367,7 @@ class KeywordGroupsDialog(QDialog):
         if dialog.exec() == QDialog.Accepted:
             new_cat = dialog.get_text().strip().lower()
             if new_cat and new_cat not in self.keyword_groups:
-                self.keyword_groups[new_cat] = []
+                self.keyword_groups[new_cat] = ""  # <--- Fixed: initialized as empty string
                 self.populate_groups()
 
     def resizeEvent(self, event):
@@ -1435,6 +1455,202 @@ class WarningDialog(QDialog):
         card_layout.addLayout(btn_layout)
 
         main_layout.addWidget(card)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self.dragPosition is not None:
+            self.move(event.globalPosition().toPoint() - self.dragPosition)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.dragPosition = None
+        event.accept()
+
+# ------------------------------------
+# Image Viewer Dialog
+# -------------------------------------
+class ImageViewerDialog(QDialog):
+    def __init__(self, image_path, title_text="Image Viewer", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"TagGUI Next - {title_text}")
+        self.resize(900, 700)
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        self.image_path = image_path
+        self.dragPosition = None
+
+        # --- Panning & Zoom State ---
+        self.zoom_factor = 1.0
+        self.min_zoom = 0.1
+        self.max_zoom = 10.0
+        self.is_panning = False
+        self.pan_start_pos = None
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(12)
+
+        # Header bar with title and close button
+        header_layout = QHBoxLayout()
+        title = QLabel(title_text.upper())
+        title.setObjectName("titleLabel")
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+
+        self.close_icon_btn = QToolButton()
+        self.close_icon_btn.setObjectName("dialogCloseBtn")
+        self.close_icon_btn.setText("×")
+        self.close_icon_btn.setFixedSize(20, 20)
+        self.close_icon_btn.setCursor(Qt.PointingHandCursor)
+        self.close_icon_btn.clicked.connect(self.reject)
+        header_layout.addWidget(self.close_icon_btn)
+        card_layout.addLayout(header_layout)
+
+        # Image display container (ScrollArea for zoom/fit handling)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setObjectName("imageScrollArea")
+        self.scroll_area.setStyleSheet("background: transparent; border: none;")
+
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setStyleSheet("background: transparent;")
+
+        self.original_pixmap = QPixmap(str(image_path))
+        self.image_label.setPixmap(self.original_pixmap)
+
+        # Install event filters for panning and viewport wheel zoom
+        self.image_label.installEventFilter(self)
+        self.scroll_area.viewport().installEventFilter(self)
+
+        self.scroll_area.setWidget(self.image_label)
+        card_layout.addWidget(self.scroll_area)
+
+        main_layout.addWidget(card)
+
+        # Standard Size Grip Setup
+        self.size_grip = QSizeGrip(self)
+        self.size_grip.setObjectName("sizeGrip")
+        self.size_grip.raise_()
+
+        self.updateImageScale()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+        grip_size = 16
+        self.size_grip.setGeometry(self.width() - grip_size - 12, self.height() - grip_size - 12, grip_size, grip_size)
+        self.size_grip.raise_()
+
+        if not hasattr(self, "_resize_timer"):
+            self._resize_timer = QTimer(self)
+            self._resize_timer.setSingleShot(True)
+            # Change this to call a resize-specific handler instead of resetting fit
+            self._resize_timer.timeout.connect(self.handleWindowResize)
+
+        self._resize_timer.start(40)
+
+    def handleWindowResize(self):
+        # If user has zoomed in/out manually, keep applying their zoom factor.
+        # Otherwise, maintain initial fit-to-window scaling.
+        if self.zoom_factor != 1.0:
+            self.applyZoom()
+        else:
+            self.updateImageScale()
+
+    def updateImageScale(self):
+        if not self.original_pixmap.isNull():
+            available_size = self.scroll_area.viewport().size()
+            if available_size.width() <= 1 or available_size.height() <= 1:
+                return
+
+            img_size = self.original_pixmap.size()
+            target_size = available_size - QSize(20, 20)
+
+            # Only auto-fit if zoom factor is at default (1.0)
+            if self.zoom_factor == 1.0:
+                if img_size.width() > target_size.width() or img_size.height() > target_size.height():
+                    scaled = self.original_pixmap.scaled(
+                        target_size,
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                    self.image_label.setPixmap(scaled)
+                else:
+                    self.image_label.setPixmap(self.original_pixmap)
+
+    def applyZoom(self):
+        if not self.original_pixmap.isNull():
+            base_size = self.original_pixmap.size()
+            new_width = int(base_size.width() * self.zoom_factor)
+            new_height = int(base_size.height() * self.zoom_factor)
+
+            scaled = self.original_pixmap.scaled(
+                new_width,
+                new_height,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            self.image_label.setPixmap(scaled)
+            self.image_label.resize(scaled.size())
+
+    def eventFilter(self, obj, event):
+        # 1. Handle Wheel Zoom on the Scroll Area Viewport
+        if obj == self.scroll_area.viewport() and event.type() == QEvent.Type.Wheel:
+            angle_delta = event.angleDelta().y()
+            if angle_delta != 0:
+                if angle_delta > 0:
+                    self.zoom_factor *= 1.15
+                else:
+                    self.zoom_factor /= 1.15
+
+                self.zoom_factor = max(self.min_zoom, min(self.max_zoom, self.zoom_factor))
+                self.applyZoom()
+            event.accept()
+            return True
+
+        # 2. Handle Click-and-Drag Panning on the Image Label
+        if obj == self.image_label:
+            if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.LeftButton:
+                h_bar = self.scroll_area.horizontalScrollBar()
+                v_bar = self.scroll_area.verticalScrollBar()
+                if h_bar.maximum() > 0 or v_bar.maximum() > 0:
+                    self.is_panning = True
+                    self.pan_start_pos = event.globalPosition().toPoint()
+                    self.image_label.setCursor(Qt.ClosedHandCursor)
+                    event.accept()
+                    return True
+
+            elif event.type() == QEvent.Type.MouseMove and self.is_panning:
+                delta = event.globalPosition().toPoint() - self.pan_start_pos
+                self.pan_start_pos = event.globalPosition().toPoint()
+
+                h_bar = self.scroll_area.horizontalScrollBar()
+                v_bar = self.scroll_area.verticalScrollBar()
+                h_bar.setValue(h_bar.value() - delta.x())
+                v_bar.setValue(v_bar.value() - delta.y())
+                event.accept()
+                return True
+
+            elif event.type() == QEvent.Type.MouseButtonRelease and event.button() == Qt.LeftButton:
+                if self.is_panning:
+                    self.is_panning = False
+                    self.image_label.setCursor(Qt.ArrowCursor)
+                    event.accept()
+                    return True
+
+        return super().eventFilter(obj, event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

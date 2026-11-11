@@ -13,9 +13,9 @@ from PySide6.QtGui import QIcon, QColor
 from huggingface_hub.constants import HF_HUB_CACHE
 
 from autotagger import AutoTagWorker
-from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog, WarningDialog
+from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog, WarningDialog, ImageViewerDialog
 
-# version = 1.2.49
+# version = 1.2.51
 
 # ==============================================================================
 #  DEBUG CONFIGURATION
@@ -903,3 +903,13 @@ class TagGUIBridge(QObject):
             dialog.exec()
         except Exception as e:
             print(f"[Backend] Error opening warning dialog: {e}")
+
+    @Slot(str)
+    def openImageViewer(self, relative_path):
+        try:
+            img_path = self._dataset_path / relative_path
+            if img_path.exists():
+                dialog = ImageViewerDialog(img_path, title_text=img_path.name, parent=self.parent_window)
+                dialog.exec()
+        except Exception as e:
+            print(f"[Backend] Error opening image viewer dialog: {e}")

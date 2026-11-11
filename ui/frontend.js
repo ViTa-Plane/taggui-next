@@ -16,8 +16,8 @@ const MAX_HISTORY = 50;
 let currentSettingsData = {
     keywords: "",
     keyword_groups: {
-        "general": ["masterpiece", "best quality"],
-        "characters": ["1girl", "solo"]
+        "general": "masterpiece, best quality",
+        "characters": "1girl, solo"
     },
     model_name: "SmilingWolf/wd-eva02-large-tagger-v3",
     general_threshold: 0.35,
@@ -110,7 +110,7 @@ function applyLoadedSettings(settingsRes) {
         currentSettingsData = JSON.parse(settingsRes);
 
         if (keywordsCombo) {
-            const groups = currentSettingsData.keyword_groups || { "general": ["masterpiece", "best quality"], "characters": ["1girl", "solo"] };
+            const groups = currentSettingsData.keyword_groups || { "general": "masterpiece, best quality", "characters": "1girl, solo" };
 
             const selectedIdx = keywordsCombo.selectedIndex;
             let activeGroupKey = null;
@@ -525,6 +525,14 @@ function renderGrid() {
             e.preventDefault();
             e.stopPropagation();
             openBulkImageEditModal(originalIdx);
+        };
+
+        //  Bind double-click  on the image card to open the ImageViewer modal
+        card.ondblclick = (e) => {
+            if (typeof backend !== 'undefined' && backend.openImageViewer) {
+                backend.openImageViewer(img.relative_path);
+            }
+            e.stopPropagation();
         };
 
         const imgElement = card.querySelector('img');
@@ -1091,7 +1099,7 @@ function addToKeywords(tag) {
                 if (currentSettingsData.keyword_groups) {
                     const groupKey = groupTitle.toLowerCase();
                     if (currentSettingsData.keyword_groups[groupKey]) {
-                        currentSettingsData.keyword_groups[groupKey] = [...keywordsList];
+                        currentSettingsData.keyword_groups[groupKey] = keywordsList.join(', '); // <--- Fixed: joined as string
                     }
                 }
                 foundMatch = true;
@@ -1138,7 +1146,7 @@ function removeFromKeywords(tag) {
                 if (currentSettingsData.keyword_groups) {
                     const groupKey = groupTitle.toLowerCase();
                     if (currentSettingsData.keyword_groups[groupKey]) {
-                        currentSettingsData.keyword_groups[groupKey] = [...updatedList];
+                        currentSettingsData.keyword_groups[groupKey] = updatedList.join(', '); // <--- Fixed: joined as string
                     }
                 }
                 break;
