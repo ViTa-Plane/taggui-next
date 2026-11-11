@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon, QColor
 
-# version = 1.2.32
+# version = 1.2.38
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -1268,7 +1268,7 @@ class KeywordGroupsDialog(QDialog):
             if child.widget():
                 child.widget().deleteLater()
 
-        for group_name, tags_list in self.keyword_groups.items():
+        for group_name, tags_data in self.keyword_groups.items():
             group_box = QGroupBox()
             group_box.setObjectName("groupCardBox")
             group_box.setContentsMargins(0, 0, 0, 0)
@@ -1302,7 +1302,12 @@ class KeywordGroupsDialog(QDialog):
 
             line_edit = QLineEdit()
             line_edit.setObjectName("keywordLineEdit")
-            line_edit.setText(", ".join(tags_list))
+            # --- FIX: Handle both string and list formats safely ---
+            if isinstance(tags_data, list):
+                line_edit.setText(", ".join(tags_data))
+            else:
+                line_edit.setText(str(tags_data))
+            # ------------------------------------------------------
             line_edit.setProperty("group_name", group_name)
             g_layout.addWidget(line_edit)
 
@@ -1368,3 +1373,79 @@ class KeywordGroupsDialog(QDialog):
     def get_updated_groups(self):
         self.sync_ui_to_dict()
         return self.keyword_groups
+
+# ------------------------------------
+# Warning Dialog UI
+# -------------------------------------
+class WarningDialog(QDialog):
+    def __init__(self, title_text, message_text, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"TagGUI Next - {title_text}")
+        self.resize(420, 180)
+        self.setModal(True)
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        icon_path = Path(__file__).parent / "assets" / "icon.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
+        self.dragPosition = None
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(18, 18, 18, 18)
+        card_layout.setSpacing(12)
+
+        header_layout = QHBoxLayout()
+        badge = QLabel("⚠️")
+        badge.setStyleSheet("""
+                    background: rgba(234, 179, 8, 0.2);
+                    border: 1px solid rgba(234, 179, 8, 0.4);
+                    border-radius: 6px;
+                    padding: 2px 8px 6px 8px; /* Reduce top padding (2px), increase bottom padding (6px) */
+                    font-size: 14px;
+                """)
+        header_layout.addWidget(badge)
+
+        title = QLabel(title_text.upper())
+        title.setObjectName("titleLabel")
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        card_layout.addLayout(header_layout)
+
+        desc = QLabel(message_text)
+        desc.setObjectName("descLabel")
+        desc.setWordWrap(True)
+        card_layout.addWidget(desc)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+
+        self.ok_btn = QPushButton("OK")
+        self.ok_btn.setObjectName("confirmBtn")
+        self.ok_btn.clicked.connect(self.accept)
+
+        btn_layout.addWidget(self.ok_btn)
+        card_layout.addLayout(btn_layout)
+
+        main_layout.addWidget(card)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self.dragPosition is not None:
+            self.move(event.globalPosition().toPoint() - self.dragPosition)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.dragPosition = None
+        event.accept()

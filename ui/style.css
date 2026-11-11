@@ -261,6 +261,30 @@ main { flex: 1; display: flex; flex-direction: column; background-color: var(--b
   gap: 6px;
   cursor: pointer;
 }
+/* --- Added Active Tag Selection Style --- */
+/*.tag-chip.selected {*/
+/*  border-color: #38bdf8 !important;*/
+/*  background-color: rgba(56, 189, 248, 0.3) !important;*/
+/*  color: #ffffff !important;*/
+/*  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);*/
+/*}*/
+
+/* --- Distinct Alber Active Tag Selection Style --- */
+/*.tag-chip.selected {*/
+/*  border-color: #f59e0b !important; !* Amber / Gold border *!*/
+/*  background-color: rgba(245, 158, 11, 0.25) !important; !* Warm amber glow *!*/
+/*  color: #fde68a !important; !* Bright warm text *!*/
+/*  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);*/
+/*}*/
+
+/* --- Balanced Cyan Active Tag Selection Style (Matching Drop Hue) --- */
+.tag-chip.selected {
+  border-color: #38bdf8 !important; /* Exact drop indicator hue */
+  background-color: rgba(56, 189, 248, 0.15) !important; /* Softer, muted background fill */
+  color: #e2e8f0 !important; /* Balanced primary text color */
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15); /* Softer glow */
+}
+
 .tag-chip span { cursor: pointer; color: #818cf8; }
 .tag-chip span:hover { color: #f87171; }
 

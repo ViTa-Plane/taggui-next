@@ -13,9 +13,9 @@ from PySide6.QtGui import QIcon, QColor
 from huggingface_hub.constants import HF_HUB_CACHE
 
 from autotagger import AutoTagWorker
-from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog
+from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog, WarningDialog
 
-# version = 1.2.30
+# version = 1.2.49
 
 # ==============================================================================
 #  DEBUG CONFIGURATION
@@ -50,15 +50,21 @@ class TagGUIBridge(QObject):
         super().__init__()
         self.parent_window = parent_window
 
+        # --- Ensure global assets files exist ---
+        self._ensure_global_settings_exist()
+        self._ensure_custom_keywords_exist()
+
         initial_path = dataset_path
         if not initial_path:
             config_path = Path.cwd() / "assets/settings.json"
             if config_path.exists():
                 try:
                     config_data = json.loads(config_path.read_text(encoding="utf-8"))
-                    saved_path = Path(config_data.get("last_path", ""))
-                    if saved_path.exists():
-                        initial_path = saved_path
+                    raw_last_path = config_data.get("last_path", "")
+                    if raw_last_path.strip():
+                        saved_path = Path(raw_last_path)
+                        if saved_path.exists() and saved_path.is_dir():
+                            initial_path = saved_path
                 except Exception as e:
                     print(f"[Backend] Failed to load settings.json: {e}")
 
@@ -73,6 +79,142 @@ class TagGUIBridge(QObject):
         self._save_last_path_config()
         self.cleanupThumbnails()
         self._e621_tag_index = []
+
+    def _ensure_global_settings_exist(self):
+        """Ensures assets/settings.json exists only for tracking last_path."""
+        try:
+            assets_dir = Path.cwd() / "assets"
+            assets_dir.mkdir(exist_ok=True)
+
+            global_settings_path = assets_dir / "settings.json"
+            if not global_settings_path.exists():
+                default_global_template = {
+                    "last_path": ""
+                }
+                global_settings_path.write_text(
+                    json.dumps(default_global_template, indent=2),
+                    encoding="utf-8"
+                )
+                print(f"[Backend] Created default global settings at: {global_settings_path}")
+        except Exception as e:
+            print(f"[Backend Warning] Failed to create global settings.json: {e}")
+
+    def _ensure_custom_keywords_exist(self):
+        """Creates assets/custom_keywords.json with default global keyword groups if missing."""
+        try:
+            assets_dir = Path.cwd() / "assets"
+            assets_dir.mkdir(exist_ok=True)
+
+            keywords_path = assets_dir / "custom_keywords.json"
+            if not keywords_path.exists():
+                default_keywords_template = {
+                    "keyword_groups": {
+                        "general": "masterpiece, best quality",
+                        "characters": "1girl, solo"
+                    }
+                }
+                keywords_path.write_text(
+                    json.dumps(default_keywords_template, indent=2),
+                    encoding="utf-8"
+                )
+                print(f"[Backend] Created default custom keywords template at: {keywords_path}")
+        except Exception as e:
+            print(f"[Backend Warning] Failed to create custom_keywords.json: {e}")
+
+    def _save_last_path_config(self):
+        """Saves only the last_path to assets/settings.json without touching keywords."""
+        try:
+            config_path = Path.cwd() / "assets/settings.json"
+            if config_path.exists():
+                try:
+                    config_data = json.loads(config_path.read_text(encoding="utf-8"))
+                except Exception:
+                    config_data = {}
+            else:
+                config_data = {}
+
+            config_data["last_path"] = str(self._dataset_path.resolve())
+            config_path.write_text(
+                json.dumps(config_data, indent=2),
+                encoding="utf-8"
+            )
+        except Exception as e:
+            print(f"[Backend] Failed to save settings.json: {e}")
+
+    @Slot(result=str)
+    def getDatasetSettings(self):
+        # 1. Load global default keyword groups as strings from assets/custom_keywords.json
+        default_keyword_groups = {
+            "general": "masterpiece, best quality",
+            "characters": "1girl, solo"
+        }
+        global_keywords_path = Path(__file__).parent / "assets" / "custom_keywords.json"
+        if global_keywords_path.exists():
+            try:
+                g_data = json.loads(global_keywords_path.read_text(encoding="utf-8"))
+                raw_groups = g_data.get("keyword_groups", {})
+                if isinstance(raw_groups, dict) and raw_groups:
+                    # Normalize lists to comma-separated strings if any legacy format exists
+                    normalized = {}
+                    for k, v in raw_groups.items():
+                        if isinstance(v, list):
+                            normalized[k] = ", ".join(v)
+                        else:
+
+                            normalized[k] = str(v)
+                    default_keyword_groups = normalized
+            except Exception as e:
+                print(f"[Backend Warning] Failed to read global custom_keywords.json: {e}")
+
+        default_settings = {
+            "keywords": "",
+            "keyword_groups": default_keyword_groups,
+            "use_e621": False,
+            "model_name": "SmilingWolf/wd-eva02-large-tagger-v3",
+            "general_threshold": 0.35,
+            "character_threshold": 0.85,
+            "general_mcut_enabled": False,
+            "character_mcut_enabled": False,
+            "tag_strategy": "add",
+            "task_command": "<CAPTION>",
+            "custom_commands": [],
+            "thinking_mode": False,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20,
+            "qwen_max_new_tokens": 256,
+            "qwen_min_new_tokens": 10,
+            "captioner_max_new_tokens": 150,
+            "captioner_min_length": 30,
+            "captioner_do_sample": True,
+            "captioner_temperature": 0.7,
+            "captioner_repetition_penalty": 1.2,
+            "captioner_num_beams": 3
+        }
+
+        settings_path = self._dataset_path / "settings.json"
+        if settings_path.exists():
+            try:
+                content = settings_path.read_text(encoding="utf-8")
+                dataset_data = json.loads(content)
+
+                dataset_keyword_groups = dataset_data.get("keyword_groups")
+                default_settings.update(dataset_data)
+
+                # Merge global default keyword groups with dataset keyword groups key-by-key
+                if isinstance(dataset_keyword_groups, dict) and dataset_keyword_groups:
+                    merged_groups = default_keyword_groups.copy()
+                    for k, v in dataset_keyword_groups.items():
+                        merged_groups[k] = ", ".join(v) if isinstance(v, list) else str(v)
+                    default_settings["keyword_groups"] = merged_groups
+                else:
+                    default_settings["keyword_groups"] = default_keyword_groups
+
+                return json.dumps(default_settings, indent=2)
+            except Exception as e:
+                print(f"[Backend Warning] Failed to read dataset settings.json: {e}")
+
+        return json.dumps(default_settings, indent=2)
 
     def _load_e621_csv(self):
         try:
@@ -103,6 +245,10 @@ class TagGUIBridge(QObject):
                         })
         except Exception as e:
             print(f"[Backend Warning] Failed to load e621 CSV: {e}")
+    
+    @Property(str, notify=pathChanged)
+    def dataset_path_str(self):
+        return str(self._dataset_path.resolve())
 
     @Slot(str, result=str)
     def getE621AutocompleteSuggestions(self, query):
@@ -136,20 +282,6 @@ class TagGUIBridge(QObject):
         settings = json.loads(self.getDatasetSettings())
         return settings.get("use_e621", False)
 
-    def _save_last_path_config(self):
-        try:
-            config_path = Path.cwd() / "assets/settings.json"
-            config_path.write_text(
-                json.dumps({"last_path": str(self._dataset_path.resolve())}, indent=2),
-                encoding="utf-8"
-            )
-        except Exception as e:
-            print(f"[Backend] Failed to save settings.json: {e}")
-
-    @Property(str, notify=pathChanged)
-    def dataset_path_str(self):
-        return str(self._dataset_path.resolve())
-
     @Slot(result=str)
     def browseDatasetFolder(self):
         initial_dir = str(self._dataset_path) if self._dataset_path.exists() else str(Path.cwd())
@@ -175,49 +307,7 @@ class TagGUIBridge(QObject):
 
         return ""
 
-    @Slot(result=str)
-    def getDatasetSettings(self):
-        default_settings = {
-            "keywords": "",
-            "keyword_groups": {
-                "general": ["masterpiece", "best quality"],
-                "characters": ["1girl", "solo"]
-            },
-            "use_e621": False,
-            "model_name": "SmilingWolf/wd-eva02-large-tagger-v3",
-            "general_threshold": 0.35,
-            "character_threshold": 0.85,
-            "general_mcut_enabled": False,
-            "character_mcut_enabled": False,
-            "tag_strategy": "add",
-            "task_command": "<CAPTION>",
-            "custom_commands": [],
-            "thinking_mode": False,
-            "temperature": 0.7,
-            "top_p": 0.8,
-            "top_k": 20,
-            "qwen_max_new_tokens": 256,
-            "qwen_min_new_tokens": 10,
-            "captioner_max_new_tokens": 150,
-            "captioner_min_length": 30,
-            "captioner_do_sample": True,
-            "captioner_temperature": 0.7,
-            "captioner_repetition_penalty": 1.2,
-            "captioner_num_beams": 3
-        }
 
-        settings_path = self._dataset_path / "settings.json"
-        if settings_path.exists():
-            try:
-                content = settings_path.read_text(encoding="utf-8")
-                json.loads(content)
-                return content
-            except json.JSONDecodeError as jde:
-                print(f"[Backend Warning] settings.json corrupt: {jde}. Falling back to defaults.")
-            except Exception as e:
-                print(f"[Backend Warning] Failed to read settings.json: {e}. Falling back to defaults.")
-
-        return json.dumps(default_settings, indent=2)
 
     @Slot(str)
     def saveDatasetSettings(self, settings_json_str):
@@ -230,13 +320,30 @@ class TagGUIBridge(QObject):
 
             if settings_json_str.strip().startswith("{"):
                 data = json.loads(settings_json_str)
+
+                # Load global groups to check against so we don't redundantly write them locally
+                global_groups = {}
+                global_assets_path = Path(__file__).parent / "assets" / "settings.json"
+                if global_assets_path.exists():
+                    try:
+                        g_data = json.loads(global_assets_path.read_text(encoding="utf-8"))
+                        global_groups = g_data.get("keyword_groups", {})
+                    except Exception:
+                        pass
+
+                # If the incoming keyword_groups match the global defaults exactly,
+                # omit them from the dataset settings file to keep it clean.
+                if "keyword_groups" in data:
+                    if data["keyword_groups"] == global_groups:
+                        data.pop("keyword_groups", None)
+
                 existing.update(data)
             else:
                 existing["keywords"] = settings_json_str
 
             settings_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
             if DEBUG_MODE:
-                print("[Backend] Dataset settings saved successfully.")
+                print("[Backend] Dataset settings saved successfully (global groups omitted if unchanged).")
         except Exception as e:
             print(f"[Backend] Failed to write settings.json: {e}")
 
@@ -788,3 +895,11 @@ class TagGUIBridge(QObject):
                     print("[Backend] Keyword groups saved successfully.")
         except Exception as e:
             print(f"[Backend] Error opening keyword groups dialog: {e}")
+
+    @Slot(str, str)
+    def showWarningDialog(self, title_text, message_text):
+        try:
+            dialog = WarningDialog(title_text, message_text, parent=self.parent_window)
+            dialog.exec()
+        except Exception as e:
+            print(f"[Backend] Error opening warning dialog: {e}")
