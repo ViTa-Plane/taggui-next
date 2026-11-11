@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-# version = 1.2.64
+# version = 1.2.97
 
 # ==============================================================================
 #   DEBUG CONFIGURATION
@@ -1665,3 +1665,428 @@ class ImageViewerDialog(QDialog):
     def mouseReleaseEvent(self, event):
         self.dragPosition = None
         event.accept()
+
+# ------------------------------------
+# Dataset Tools Dialog
+# -------------------------------------
+class DatasetToolsDialog(QDialog):
+    def __init__(self, dataset_path, parent=None):
+        super().__init__(parent)
+        self.setObjectName("DatasetToolsDialog")
+        self.setWindowTitle("TagGUI Next - Dataset Bulk Tools")
+        self.resize(400, 780)
+        self.setModal(True)
+        # disable resize
+        self.setFixedSize(self.size())
+        # --------------
+        # self.setMinimumSize(400, 780)
+
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+        icon_path = Path(__file__).parent / "assets" / "icon.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
+        self.dataset_path = Path(dataset_path)
+        self.dragPosition = None
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+
+        card = QFrame()
+        card.setObjectName("cardFrame")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(12)
+
+        # Header
+        header_layout = QHBoxLayout()
+        badge = QLabel("🛠️")
+        badge.setStyleSheet("""
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 14px;
+        """)
+        header_layout.addWidget(badge)
+
+        title = QLabel("DATASET BULK TOOLS")
+        title.setObjectName("titleLabel")  # Matches style.qss label selector
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+
+        self.close_icon_btn = QToolButton()
+        self.close_icon_btn.setObjectName("dialogCloseBtn")
+        self.close_icon_btn.setText("×")
+        self.close_icon_btn.setFixedSize(20, 20)
+        self.close_icon_btn.setCursor(Qt.PointingHandCursor)
+        self.close_icon_btn.clicked.connect(self.reject)
+        header_layout.addWidget(self.close_icon_btn)
+        card_layout.addLayout(header_layout)
+
+        # Scrollable Content Area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+
+        scroll_content = QWidget()
+        scroll_content.setObjectName("scrollContent")  # Matches style.qss widget selector
+        form_layout = QVBoxLayout(scroll_content)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setSpacing(14)
+
+        # --- Tool 1: Find & Replace Tag ---
+        find_replace_group = QGroupBox("Find && Replace Tag")
+        find_replace_group.setObjectName("groupCardBox")
+        fr_layout = QVBoxLayout(find_replace_group)
+        fr_layout.setSpacing(10)
+
+        lbl_find = QLabel("Find Tag:")
+        lbl_find.setObjectName("descLabel")
+        lbl_find.setStyleSheet("margin-top: 8px;")
+        fr_layout.addWidget(lbl_find)
+
+        self.find_input = QLineEdit()
+        self.find_input.setObjectName("keywordLineEdit")
+        self.find_input.setPlaceholderText("e.g. old_tag")
+        fr_layout.addWidget(self.find_input)
+
+        lbl_rep = QLabel("Replace With:")
+        lbl_rep.setObjectName("descLabel")
+        lbl_rep.setStyleSheet("margin-top: 8px;")
+        fr_layout.addWidget(lbl_rep)
+
+        self.replace_input = QLineEdit()
+        self.replace_input.setObjectName("keywordLineEdit")
+        self.replace_input.setPlaceholderText("e.g. new_tag")
+        fr_layout.addWidget(self.replace_input)
+
+        self.apply_fr_btn = QPushButton("Run Find && Replace")
+        self.apply_fr_btn.setObjectName("confirmBtn")
+        self.apply_fr_btn.clicked.connect(self.run_find_replace)
+        fr_layout.addWidget(self.apply_fr_btn)
+        form_layout.addWidget(find_replace_group)
+
+        # --- Tool 2: Bulk Add Prefix / Suffix ---
+        prefix_suffix_group = QGroupBox("Add Prefix / Suffix Tag")
+        prefix_suffix_group.setObjectName("groupCardBox")
+        ps_layout = QVBoxLayout(prefix_suffix_group)
+        ps_layout.setSpacing(10)
+
+        lbl_add = QLabel("Tag to Add:")
+        lbl_add.setObjectName("descLabel")
+        lbl_add.setStyleSheet("margin-top: 8px;")
+        ps_layout.addWidget(lbl_add)
+
+        self.ps_input = QLineEdit()
+        self.ps_input.setObjectName("keywordLineEdit")
+        self.ps_input.setPlaceholderText("e.g. masterpiece")
+        ps_layout.addWidget(self.ps_input)
+
+        ps_btn_row = QHBoxLayout()
+        self.apply_prefix_btn = QPushButton("Add to Start")
+        self.apply_prefix_btn.setObjectName("confirmBtn")
+        self.apply_prefix_btn.clicked.connect(lambda: self.run_prefix_suffix("prefix"))
+
+        self.apply_suffix_btn = QPushButton("Add to End")
+        self.apply_suffix_btn.setObjectName("confirmBtn")
+        self.apply_suffix_btn.clicked.connect(lambda: self.run_prefix_suffix("suffix"))
+
+        ps_btn_row.addWidget(self.apply_prefix_btn)
+        ps_btn_row.addWidget(self.apply_suffix_btn)
+        ps_layout.addLayout(ps_btn_row)
+        form_layout.addWidget(prefix_suffix_group)
+
+        # --- Tool 3: Bulk Remove Tag ---
+        remove_group = QGroupBox("Remove Specific Tag")
+        remove_group.setObjectName("groupCardBox")
+        rem_layout = QVBoxLayout(remove_group)
+        rem_layout.setSpacing(10)
+
+        lbl_rem = QLabel("Tag to Remove From All Images:")
+        lbl_rem.setObjectName("descLabel")
+        lbl_rem.setStyleSheet("margin-top: 8px;")
+        rem_layout.addWidget(lbl_rem)
+
+        self.remove_input = QLineEdit()
+        self.remove_input.setObjectName("keywordLineEdit")
+        self.remove_input.setPlaceholderText("e.g. unwanted_tag")
+        rem_layout.addWidget(self.remove_input)
+
+        self.apply_remove_btn = QPushButton("Remove Tag Everywhere")
+        self.apply_remove_btn.setObjectName("deleteBtn")
+        self.apply_remove_btn.clicked.connect(self.run_remove_tag)
+        rem_layout.addWidget(self.apply_remove_btn)
+        form_layout.addWidget(remove_group)
+
+        # --- Tool 4: Clear Orphaned Files ---
+        orphan_group = QGroupBox("Clear Orphaned Files")
+        orphan_group.setObjectName("groupCardBox")
+        orphan_layout = QVBoxLayout(orphan_group)
+        orphan_layout.setSpacing(10)
+
+        lbl_orph = QLabel("Move unpaired images or .txt files to local trash:")
+        lbl_orph.setObjectName("descLabel")
+        lbl_orph.setStyleSheet("margin-top: 8px;")
+        orphan_layout.addWidget(lbl_orph)
+
+        self.apply_orphan_btn = QPushButton("Clear Orphans")
+        self.apply_orphan_btn.setObjectName("deleteBtn")
+        self.apply_orphan_btn.clicked.connect(self.run_clear_orphans)
+        orphan_layout.addWidget(self.apply_orphan_btn)
+        form_layout.addWidget(orphan_group)
+
+        # --- Tool 5: Dataset Cleanup & Maintenance ---
+        cleanup_group = QGroupBox("Dataset Cleanup && Maintenance")
+        cleanup_group.setObjectName("groupCardBox")
+        cleanup_layout = QVBoxLayout(cleanup_group)
+        cleanup_layout.setSpacing(10)
+
+        lbl_clean = QLabel("Manage generated thumbnails and dataset trash:")
+        lbl_clean.setObjectName("descLabel")
+        lbl_clean.setStyleSheet("margin-top: 8px;")
+        cleanup_layout.addWidget(lbl_clean)
+
+        clean_btn_row = QHBoxLayout()
+        self.apply_clear_thumbs_btn = QPushButton("Rebuild Thumbnails")
+        self.apply_clear_thumbs_btn.setObjectName("cancelBtn")
+        self.apply_clear_thumbs_btn.clicked.connect(self.run_clear_thumbnails)
+
+        self.apply_clear_trash_btn = QPushButton("Clear Trash")
+        self.apply_clear_trash_btn.setObjectName("deleteBtn")
+        self.apply_clear_trash_btn.clicked.connect(self.run_clear_trash)
+
+        clean_btn_row.addWidget(self.apply_clear_thumbs_btn)
+        clean_btn_row.addWidget(self.apply_clear_trash_btn)
+        cleanup_layout.addLayout(clean_btn_row)
+        form_layout.addWidget(cleanup_group)
+
+
+        form_layout.addStretch()
+        scroll.setWidget(scroll_content)
+        card_layout.addWidget(scroll)
+
+        # Footer
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        self.close_btn = QPushButton("Done")
+        self.close_btn.setObjectName("cancelBtn")
+        self.close_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(self.close_btn)
+        card_layout.addLayout(btn_layout)
+
+        main_layout.addWidget(card)
+
+        self.size_grip = QSizeGrip(self)
+        self.size_grip.setObjectName("sizeGrip")
+        self.size_grip.raise_()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        grip_size = 16
+        self.size_grip.setGeometry(self.width() - grip_size - 12, self.height() - grip_size - 12, grip_size, grip_size)
+        self.size_grip.raise_()
+        self.size_grip.hide()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragPosition = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.LeftButton and self.dragPosition is not None:
+            self.move(event.globalPosition().toPoint() - self.dragPosition)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self.dragPosition = None
+        event.accept()
+
+    def _process_all_txt_files(self, processor_func):
+        """Helper to iterate through all .txt tag files in the dataset."""
+        if not self.dataset_path.exists():
+            return 0
+        count = 0
+        for txt_path in self.dataset_path.rglob("*.txt"):
+            if ".taggui_thumbs" in txt_path.parts or ".taggui_trash" in txt_path.parts:
+                continue
+            try:
+                content = txt_path.read_text(encoding="utf-8").strip()
+                if not content:
+                    continue
+                tags = [t.strip() for t in content.replace("\n", ",").split(",") if t.strip()]
+                new_tags = processor_func(tags)
+                if new_tags is not None:
+                    cleaned = [t for t in new_tags if t]
+                    if cleaned:
+                        txt_path.write_text(", ".join(cleaned), encoding="utf-8")
+                    else:
+                        txt_path.unlink()  # remove empty file
+                    count += 1
+            except Exception as e:
+                print(f"[Backend Tool] Error processing {txt_path.name}: {e}")
+        return count
+
+    def run_find_replace(self):
+        target = self.find_input.text().strip().lower()
+        replacement = self.replace_input.text().strip()
+        if not target:
+            return
+
+        def process(tags):
+            changed = False
+            updated = []
+            for t in tags:
+                if t.lower() == target:
+                    if replacement:
+                        updated.append(replacement)
+                    changed = True
+                else:
+                    updated.append(t)
+            return updated if changed else None
+
+        modified_count = self._process_all_txt_files(process)
+        WarningDialog("Task Completed", f"Find & Replace completed successfully.\nUpdated {modified_count} image(s).",
+                      parent=self).exec()
+
+    def run_prefix_suffix(self, mode):
+        tag = self.ps_input.text().strip()
+        if not tag:
+            return
+
+        def process(tags):
+            tag_lower = tag.lower()
+            # Remove if already exists to avoid duplicates before placing at start/end
+            filtered = [t for t in tags if t.lower() != tag_lower]
+            if mode == "prefix":
+                return [tag] + filtered
+            else:
+                return filtered + [tag]
+
+        modified_count = self._process_all_txt_files(process)
+        WarningDialog("Task Completed", f"Added '{tag}' as {mode} across {modified_count} image(s).",
+                      parent=self).exec()
+
+    def run_remove_tag(self):
+        raw_input_text = self.remove_input.text().strip()
+        if not raw_input_text:
+            return
+
+        # Split input by commas and clean each target tag
+        targets = {t.strip().lower() for t in raw_input_text.split(",") if t.strip().lower()}
+        if not targets:
+            return
+
+        def process(tags):
+            initial_len = len(tags)
+            # Filter out any tag that matches any of the targets in our set
+            filtered = [t for t in tags if t.lower() not in targets]
+            if len(filtered) < initial_len:
+                return filtered
+            return None
+
+        modified_count = self._process_all_txt_files(process)
+        WarningDialog("Task Completed", f"Removed specified tag(s) from {modified_count} image(s).", parent=self).exec()
+
+    def run_clear_orphans(self):
+        if not self.dataset_path.exists():
+            return
+
+        valid_extensions = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+        trash_dir = self.dataset_path / ".taggui_trash"
+        trash_dir.mkdir(parents=True, exist_ok=True)
+
+        images_found = set()
+        txts_found = set()
+
+        # 1. Collect all images and .txt files (skipping thumbs and trash)
+        for path in self.dataset_path.rglob("*"):
+            if path.is_file():
+                if ".taggui_thumbs" in path.parts or ".taggui_trash" in path.parts:
+                    continue
+                rel_parts = path.relative_to(self.dataset_path)
+                if path.suffix.lower() in valid_extensions:
+                    images_found.add(rel_parts)
+                elif path.suffix.lower() == ".txt":
+                    txts_found.add(rel_parts)
+
+        moved_count = 0
+
+        # 2. Find images without matching .txt files
+        for img_rel in images_found:
+            txt_rel = img_rel.with_suffix(".txt")
+            if txt_rel not in txts_found:
+                try:
+                    src_img = self.dataset_path / img_rel
+                    dest_img = trash_dir / img_rel
+                    dest_img.parent.mkdir(parents=True, exist_ok=True)
+                    if src_img.exists():
+                        import shutil
+                        shutil.move(str(src_img), str(dest_img))
+                        moved_count += 1
+                        print(f"[Backend Tool] Moved unpaired image to trash: {img_rel}")
+                except Exception as e:
+                    print(f"[Backend Tool] Error moving unpaired image {img_rel}: {e}")
+
+        # 3. Find .txt files without matching images
+        for txt_rel in txts_found:
+            img_rel = txt_rel.with_suffix("")  # Check base name against valid extensions
+            has_image = any((self.dataset_path / txt_rel.with_suffix(ext)).exists() for ext in valid_extensions)
+            # Alternatively, check against discovered images set
+            matched = any(img_rel == img_r.with_suffix("") for img_r in images_found)
+
+            if not matched:
+                try:
+                    src_txt = self.dataset_path / txt_rel
+                    dest_txt = trash_dir / txt_rel
+                    dest_txt.parent.mkdir(parents=True, exist_ok=True)
+                    if src_txt.exists():
+                        import shutil
+                        shutil.move(str(src_txt), str(dest_txt))
+                        moved_count += 1
+                        print(f"[Backend Tool] Moved orphaned .txt to trash: {txt_rel}")
+                except Exception as e:
+                    print(f"[Backend Tool] Error moving orphaned txt {txt_rel}: {e}")
+
+        WarningDialog("Task Completed",
+                      f"Clear Orphans completed successfully.\nMoved {moved_count} unpaired item(s) to dataset trash.",
+                      parent=self).exec()
+
+    def run_clear_thumbnails(self):
+        if not self.dataset_path.exists():
+            return
+
+        thumbs_dir = self.dataset_path / ".taggui_thumbs"
+        removed_count = 0
+        if thumbs_dir.exists():
+            for thumb_file in thumbs_dir.rglob("*"):
+                if thumb_file.is_file():
+                    try:
+                        thumb_file.unlink()
+                        removed_count += 1
+                    except Exception as e:
+                        print(f"[Backend Tool] Failed to delete thumbnail {thumb_file.name}: {e}")
+
+        WarningDialog("Task Completed", f"Cleared {removed_count} cached thumbnail(s) successfully.", parent=self).exec()
+
+    def run_clear_trash(self):
+        if not self.dataset_path.exists():
+            return
+
+        trash_dir = self.dataset_path / ".taggui_trash"
+        removed_count = 0
+        if trash_dir.exists():
+            import shutil
+            for item in trash_dir.iterdir():
+                try:
+                    if item.is_dir():
+                        shutil.rmtree(str(item))
+                    else:
+                        item.unlink()
+                    removed_count += 1
+                except Exception as e:
+                    print(f"[Backend Tool] Failed to delete trash item {item.name}: {e}")
+
+        WarningDialog("Task Completed", f"Permanently cleared {removed_count} item(s) from dataset trash.", parent=self).exec()

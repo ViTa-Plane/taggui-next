@@ -13,9 +13,9 @@ from PySide6.QtGui import QIcon, QColor
 from huggingface_hub.constants import HF_HUB_CACHE
 
 from autotagger import AutoTagWorker
-from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog, WarningDialog, ImageViewerDialog
+from backend import DeleteConfirmDialog, TaggingConfirmDialog, TaggingProgressDialog, SettingsDialog, PromptInputDialog, KeywordGroupsDialog, WarningDialog, ImageViewerDialog, DatasetToolsDialog
 
-# version = 1.2.51
+# version = 1.2.53
 
 # ==============================================================================
 #  DEBUG CONFIGURATION
@@ -912,4 +912,13 @@ class TagGUIBridge(QObject):
                 dialog = ImageViewerDialog(img_path, title_text=img_path.name, parent=self.parent_window)
                 dialog.exec()
         except Exception as e:
-            print(f"[Backend] Error opening image viewer dialog: {e}")
+            print(f"[Backend] Error opening Image Viewer dialog: {e}")
+
+    @Slot()
+    def openNativeDatasetToolsDialog(self):
+        try:
+            dialog = DatasetToolsDialog(self._dataset_path, parent=self.parent_window)
+            dialog.exec()
+            print("[Backend] Dataset tools dialog closed.")
+        except Exception as e:
+            print(f"[Backend] Error opening dataset tools dialog: {e}")

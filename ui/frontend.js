@@ -388,6 +388,14 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
     }
 
     document.getElementById('open-dataset-btn').addEventListener('click', browseFolder);
+    document.getElementById('dataset-tools-btn').addEventListener('click', function() {
+        if (backend && typeof backend.openNativeDatasetToolsDialog === 'function') {
+            backend.openNativeDatasetToolsDialog();
+            setTimeout(fetchDataset, 300); // Refresh dataset grid after tools run
+        }
+    });
+
+
     document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
     document.getElementById('github-btn').addEventListener('click', () => {
         if (backend) backend.openExternalUrl('https://github.com/ViTa-Plane/taggui-next');
